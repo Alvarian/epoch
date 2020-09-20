@@ -1,0 +1,31 @@
+stacks:
+======
+docker for nodejs, redis and psql
+
+structure:
+=========
+using...
+https://api.slack.com/messaging/webhooks
+MVC, persisting messages dependent on user
+
+features:
+========
+bugtracker - [projectid, projectname, projectdescription, projectadmin],  #CRUD
+			 [workername, workeremail, workerrole],
+			 [tickettitle, ticketcreator, ticketworker, ticketstatus, ticketcreated] 
+scheduler (personal||group) - [timedue(personal), timeduename, timeduedescription],  #CRUD
+							  [futureinvite(plural), futureinvitename, futureinvitedescription]
+message finder - payloadid, saverid  #CRD
+
+
+for bugtracker, on log in or while logged in, ticket updates alert user.
+tickets can be reassigned or deleted by the creator, but updated by whos assigned.
+if ticket is altered in any way, the creator, project admin and worker are alerted on action and status.
+
+for scheduler, by default is singular service, but if external personel are included, it will send invites to receive reminders on confirmation, if email is not provided by slack payload, prompt field to aquire it.
+
+for message finder, webhook a payload search per key typed causing a real time listing of all possible searches on the gui, and each of them having an option to save the message id to db with your user id, as archive. 
+archive by default is an empty container to be opened anywhere, only to be popluted with saved messages.
+each archived item has a time stamp and the author with an option to remove it from your archive container.
+
+.
