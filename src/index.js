@@ -11,8 +11,10 @@ const app = new App({
 });
 
 // Bug Tracker
-const trackerRoute = require('./routes/trackerRoute');
+const { trackerRoute, trackerActions } = require('./routes/trackerRoute');
 app.command('/track', trackerRoute);
+// Action
+trackerActions(app);
 
 // Scheduler
 const schedulerRoute = require('./routes/schedulerRoute');
@@ -21,6 +23,7 @@ app.command('/schedule', schedulerRoute);
 // Message Archiver
 const archiverRoute = require('./routes/archiverRoute');
 app.command('/search', archiverRoute);
+
 
 
 (async () => {

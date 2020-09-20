@@ -21,9 +21,7 @@ function cacheIfFieldDoesNotExist(paramFromRequest) {
 	});
 }
 
-const getProjAdminToSayHello = async (module, param) => {
-	const { say, ack } = module;
-
+const getProjAdminToSayHello = async ({ say, ack }, param) => {
 	try {
 		await ack();
 
@@ -32,9 +30,38 @@ const getProjAdminToSayHello = async (module, param) => {
 		await say(`Hi, I am ${adminName}.`);
 	} catch (err) {
 		console.log(err);
-
-		return;
 	}
-}
+};
 
-module.exports = { getProjAdminToSayHello };
+const createProjectSprint = async ({ say, ack, payload }, param) => {
+	try {
+		await ack();
+		// MODAL REQUESTING title, description, admin_name, admin_email, admin_sid
+		// ONSUBMIT 
+		await say({
+			blocks: [
+				{
+					"type": "section",
+					"text": {
+						"type": "mrkdwn",
+						"text": `Hey there <@${payload.user_id}>!`
+					},
+					"accessory": {
+						"type": "button",
+						"text": {
+							"type": "plain_text",
+							"text": "Create Project Sprint"
+						},
+						"action_id": "button_click"
+					}
+				}
+			],
+			text: `Hey there <@${payload.user_id}>!`
+		});
+	} catch (err) {
+		console.log(err);
+	}
+};
+
+
+module.exports = { getProjAdminToSayHello, createProjectSprint };
