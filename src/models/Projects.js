@@ -15,10 +15,6 @@ const Projects = database.define('projects', {
 		type: Sequelize.STRING,
 		allowNull: false
 	},
-	admin_email: {
-		type: Sequelize.STRING,
-		allowNull: false
-	},
 	admin_sid: {
 		type: Sequelize.STRING,
 		allowNull: false

@@ -11,10 +11,10 @@ const app = new App({
 });
 
 // Bug Tracker
-const { trackerRoute, trackerActions } = require('./routes/trackerRoute');
+const { trackerRoute, trackerOtherInteractions } = require('./routes/trackerRoute');
 app.command('/track', trackerRoute);
 // Action
-trackerActions(app);
+trackerOtherInteractions(app);
 
 // Scheduler
 const schedulerRoute = require('./routes/schedulerRoute');

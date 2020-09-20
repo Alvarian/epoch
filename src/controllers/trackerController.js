@@ -33,11 +33,12 @@ const getProjAdminToSayHello = async ({ say, ack }, param) => {
 	}
 };
 
-const createProjectSprint =  async ({ ack, body, client }) => {
+const openCreateSprintModel =  async ({ ack, body, client }, sprintName) => {
   // Acknowledge the command request
-  await ack();
 
   try {
+	await ack();
+    
     // Call views.open with the built-in client
     // FIELDS: title, description, admin_name, admin_email, admin_sid
     const result = await client.views.open({
@@ -47,7 +48,7 @@ const createProjectSprint =  async ({ ack, body, client }) => {
 		view: {
 			type: 'modal',
 			// View identifier
-			callback_id: 'view_1',
+			callback_id: 'create_sprint_model',
 			title: {
 				type: 'plain_text',
 				text: 'Start Sprint'
@@ -63,7 +64,8 @@ const createProjectSprint =  async ({ ack, body, client }) => {
 					element: {
 						type: 'plain_text_input',
 						action_id: 'title_input',
-						multiline: false
+						multiline: false,
+						initial_value: sprintName
 					}
 				},
 				{
@@ -75,7 +77,7 @@ const createProjectSprint =  async ({ ack, body, client }) => {
 					},
 					element: {
 						type: 'plain_text_input',
-						action_id: 'descripton_input',
+						action_id: 'description_input',
 						multiline: true
 					}
 				}
@@ -93,5 +95,42 @@ const createProjectSprint =  async ({ ack, body, client }) => {
   }
 };
 
+const createProjectSprint =  async (module) => {
+	const { ack, body, view, context } = module;
+    // FIELDS: title, description, admin_name, admin_email, admin_sid
+	const title = view['state']['values']['project_name_block']['title_input']['value'];
+	const description = view['state']['values']['project_desc_block']['description_input']['value'];
+	const admin_name = body['user']['name'];
+	const admin_sid = body['user']['id'];
+	
+	// Message the user
+	try {
+		// Acknowledge the view_submission event
+		await ack();
+		
+		// Message to send user
+		let msg = '';
+		// Save to DB
+		const results = await Projects.create({
+			title,
+			description,
+			admin_name,
+			admin_sid
+		});
 
-module.exports = { getProjAdminToSayHello, createProjectSprint };
+		if (results) {
+			// DB save was successful
+			msg = 'Your submission was successful';
+		} else {
+			msg = 'There was an error with your submission';
+		}
+		
+		console.log("LOG: ", results)
+	}
+	catch (error) {
+		console.error(error);
+	}
+}
+
+
+module.exports = { getProjAdminToSayHello, createProjectSprint, openCreateSprintModel };

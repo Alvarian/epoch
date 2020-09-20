@@ -1,4 +1,4 @@
-const { getProjAdminToSayHello, createProjectSprint } = require('../controllers/trackerController');
+const { getProjAdminToSayHello, createProjectSprint, openCreateSprintModel } = require('../controllers/trackerController');
 
 
 const trackerRoute = (module) => {
@@ -15,7 +15,7 @@ const trackerRoute = (module) => {
 			break;
 
 		case 'create sprint':
-			createProjectSprint(module, project);
+			openCreateSprintModel(module, project);
 			
 			break;
 
@@ -25,13 +25,8 @@ const trackerRoute = (module) => {
 	}
 };
 
-const trackerActions = (app) => {
-	app.action('button_click', async ({ body, ack, say }) => {
-		// Acknowledge the action
-		await ack();
-		
-		await say(`<@${body.user.id}> clicked the button`);
-	});
+const trackerOtherInteractions = (app) => {
+	app.view('create_sprint_model', createProjectSprint);
 }
 
-module.exports = { trackerRoute, trackerActions };
+module.exports = { trackerRoute, trackerOtherInteractions };
