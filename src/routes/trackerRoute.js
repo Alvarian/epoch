@@ -13,10 +13,12 @@ const trackerRoute = (module) => {
 			getProjAdminToSayHello(module, project);
 			
 			break;
+
 		case 'create sprint':
 			createProjectSprint(module, project);
 			
 			break;
+
 		default:
 			console.log('no match');
 			break;
@@ -27,6 +29,7 @@ const trackerActions = (app) => {
 	app.action('button_click', async ({ body, ack, say }) => {
 		// Acknowledge the action
 		await ack();
+		
 		await say(`<@${body.user.id}> clicked the button`);
 	});
 }
