@@ -1,7 +1,13 @@
-const { getProjAdminToSayHello, createProjectSprint, openCreateSprintModel } = require('../controllers/trackerController');
+const { 
+	getProjAdminToSayHello, 
+	createProjectSprint, 
+	openCreateSprintModel,
+	removeEphemeralBlock,
+	removeMessageBlock
+} = require('../controllers/trackerController');
 
 
-const trackerRoute = (module) => {
+const trackCommandRoutes = (module) => {
 	const { message, say, command } = module;
 
 	// params to point to controller
@@ -25,8 +31,11 @@ const trackerRoute = (module) => {
 	}
 };
 
-const trackerOtherInteractions = (app) => {
+const trackerActionRoutes = (app) => {
 	app.view('create_sprint_model', createProjectSprint);
-}
 
-module.exports = { trackerRoute, trackerOtherInteractions };
+	app.action('close_message', removeMessageBlock);
+	app.action('close_ephemeral', removeEphemeralBlock);
+};
+
+module.exports = { trackCommandRoutes, trackerActionRoutes };

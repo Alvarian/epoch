@@ -1,12 +1,33 @@
 stacks:
 ======
-docker for nodejs, redis and psql
+nodejs, redis and psql
+
 
 structure:
 =========
 using...
 https://api.slack.com/messaging/webhooks
 MVC, persisting messages dependent on user
+
+for bugtracker:
+@getSprintList
+sprint list <SprintName, adminName, createdAt, updatedAt, status
+	buttons(all: [open])>
+
+@createSprint, getSprintList, getOneSprint
+sprint card <title, description, involvedWorkers, createdAt, updatedAt, status, ticketList<>, 
+	buttons(assigned: [nothing], admin: [editSprint<>, delete<Prompt Card>], else: [request involvement<Request Card>])>
+
+	ticketList <name, assignedto, createdAt, updatedAt, creator, status, 
+		buttons(allButAssigned: [review<Ticket Card>], creator: [editTicket<>, delete<Prompt Card>], assigned: [update<Update Card>])>
+	editSprint <Title, Involved, buttons([finish])>
+	editTicket <Title, Assigned, buttons([finish])>
+
+Request Card <Role, Reason, buttons([submit])>
+Prompt Card <Delete?, buttons([Yes, No])>
+Ticket Card <name, assignedto, createdAt, updatedAt, creator, status, comments>
+Update Card	<status, comment, buttons(submit)>
+
 
 features:
 ========
@@ -16,7 +37,6 @@ bugtracker - [projectid, projectname, projectdescription, projectadmin],  #CRUD
 scheduler (personal||group) - [timedue(personal), timeduename, timeduedescription],  #CRUD
 							  [futureinvite(plural), futureinvitename, futureinvitedescription]
 message finder - payloadid, saverid  #CRD
-
 
 for bugtracker, on log in or while logged in, ticket updates alert user.
 tickets can be reassigned or deleted by the creator, but updated by whos assigned.
