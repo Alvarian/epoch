@@ -1,8 +1,14 @@
 const { 
-	getProjAdminToSayHello, 
-	createSprintCard, 
+	getProjAdminToSayHello,
+	 
 	openCreateSprintModel,
+	createSprintCard, 
 	openSprintCard,
+
+	openCreateTicketModel,
+	createTicketCard,
+	openTicketCard,
+
 	removeEphemeralBlock,
 	removeMessageBlock
 } = require('../controllers/trackerController');
@@ -40,7 +46,9 @@ const trackCommandRoutes = (module) => {
 
 const trackerActionRoutes = (app) => {
 	app.view('create_sprint_model', createSprintCard);
+	app.view('create_ticket_model', createTicketCard);
 
+	app.action('open_ticket_model', openCreateTicketModel);
 	app.action('close_message', removeMessageBlock);
 	app.action('close_ephemeral', removeEphemeralBlock);
 };

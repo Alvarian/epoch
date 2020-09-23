@@ -1,6 +1,5 @@
 const cacheClient = require('../config/cache');
-const { Sprint, Assigned, Workers } = require('../models/Tracker');
-// const Assigned = require('../models/Assigned');
+const { Sprint, Assigned, Workers, Tickets } = require('../models/Tracker');
 const fetch = require('node-fetch');
 
 
@@ -13,8 +12,11 @@ function cacheIfFieldDoesNotExist(paramFromRequest) {
 				resolve(JSON.parse(cachedData));
 			} else {
 				try {
-					const dbData = await Sprint.findAll({ include: [{model: Assigned, include: [Workers]}] });
-// console.log(dbData[0].workers_assigneds[0].worker)
+					const dbData = await Sprint.findAll({ include: [
+						{model: Assigned, include: [Workers]},
+						{model: Tickets, include: [Workers]}]
+					});
+
 					// cache
 					cacheClient.setex(paramFromRequest, 60, JSON.stringify(dbData[0]));
 					
@@ -32,12 +34,14 @@ const getProjAdminToSayHello = async ({ say, ack }, param) => {
 		await ack();
 
 		const data = await cacheIfFieldDoesNotExist(param);
-
+	// <@U024BE7LH>
 		await say(`Hi, I am ${data.admin_name}.`);
 	} catch (err) {
 		console.log(err);
 	}
 };
+
+
 
 const openCreateSprintModel =  async ({ ack, body, client, payload }, sprintName) => {
   // Acknowledge the command request
@@ -102,19 +106,18 @@ const openCreateSprintModel =  async ({ ack, body, client, payload }, sprintName
   }
 };
 
-const createSprintCard =  async (module) => {
-	const { ack, body, view, context, client } = module;
+const createSprintCard =  async ({ ack, body, view, context, client }) => {
     // FIELDS: title, description, admin_name, admin_email, admin_sid
-	const title = view['state']['values']['project_name_block']['title_input']['value'];
-	const description = view['state']['values']['project_desc_block']['description_input']['value'];
-	const admin_name = body['user']['name'];
-	const admin_sid = body['user']['id'];
+
+	const { title, description, admin_name, admin_sid } = {
+		title: view['state']['values']['project_name_block']['title_input']['value'],
+		description: view['state']['values']['project_desc_block']['description_input']['value'],
+		admin_name: body['user']['name'],
+		admin_sid: body['user']['id']	
+	};
 
 	// Message the user
 	try {
-		// Acknowledge the view_submission event
-		// await ack();
-		
 		// Message to send user
 		let msg = '';
 		
@@ -151,30 +154,28 @@ const openSprintCard = async (ack, client, botToken, responseURL, channelID, use
 
 		const data = await cacheIfFieldDoesNotExist(sprintName);
 
-		const payload = { title, description, admin, createdAt, updatedAt } = {
+		const payload = { title, description, admin, createdAt, updatedAt, tickets } = {
 			title: data.title.toUpperCase(),
 			description: data.description,
 			admin: data.admin_name,
 			createdAt: data.createdAt,
 			updatedAt: data.updatedAt,
-			workers_assigned: data.workers_assigneds
+			workers_assigned: data.workers_assigneds,  //array
+			tickets: data.tickets  // array
 		};
 
-console.log(payload);
-
-		const result = await client.chat.postEphemeral({
+		const blocksPayload = {
 			// The token you used to initialize your app is stored in the `context` object
 			token: botToken,
 			// Payload message should be posted in the channel where original message was heard
 			channel: channelID,
 			user: userID,
-			private_metadata: responseURL,
 			"blocks": [
 				{
 					"type": "header",
 					"text": {
 						"type": "plain_text",
-						"text": title
+						"text": `${title}`
 					}
 				},
 				{
@@ -190,7 +191,7 @@ console.log(payload);
 					"type": "context",
 					"elements": [
 						{
-							"text": `${createdAt}`,
+							"text": `Create on ${createdAt}`,
 							"type": "mrkdwn"
 						}
 					]
@@ -204,45 +205,184 @@ console.log(payload);
 						"type": "mrkdwn",
 						"text": " :checkered_flag: *TICKETS* :checkered_flag:"
 					}
-				},
-				{
+				}
+			]
+		};
+
+		if (!tickets.length) {
+			blocksPayload.blocks.push({
+				"type": "context",
+				"elements": [
+					{
+						"text": "No tickets have been created",
+						"type": "mrkdwn"
+					}
+				]
+			})
+		} else {
+			tickets.forEach(ticket => {
+				const { title, createdAt, creator_name, status } = ticket;
+
+				blocksPayload.blocks.push({
 					"type": "section",
 					"text": {
 						"type": "mrkdwn",
-						"text": "Replay our screening of *Threat Level Midnight* and pick up a copy of the DVD to give to your customers at the front desk."
+						"text": `*${title}* ${createdAt} ${creator_name} ${status}`
 					},
 					"accessory": {
 						"type": "button",
 						"text": {
 							"type": "plain_text",
-							"text": "Watch Now",
+							"text": "Review Ticket",
 							"emoji": true
-						}
+						},
+						"action_id": "open_ticket"
 					}
+				});
+			});
+		}
+		
+		const finalBlock = {
+			"type": "actions",
+			"elements": [
+				{
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "Create Ticket",
+						"emoji": true
+					},
+					"style": "primary",
+					"action_id": "open_ticket_model"
 				},
 				{
-					"type": "actions",
-					"elements": [
-						{
-							"type": "button",
-							"text": {
-								"type": "plain_text",
-								"text": "Close",
-								"emoji": true
-							},
-							"style": "danger",
-							"action_id": "close_ephemeral"
-						}
-					]
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "Close",
+						"emoji": true
+					},
+					"style": "danger",
+					"action_id": "close_ephemeral"
 				}
 			]
-		});
+		};
+		blocksPayload.blocks.push(finalBlock);
+
+		const result = await client.chat.postEphemeral(blocksPayload);
 
 		console.log(result.ok);
 	} catch (err) {
 		console.log(err);
 	}
 };
+
+
+
+const openCreateTicketModel = async ({ ack, body, client, payload }) => {
+	try {
+		await ack();
+
+		// Call views.open with the built-in client
+		// FIELDS: title, description, admin_name, admin_email, admin_sid
+		const result = await client.views.open({
+			// Pass a valid trigger_id within 3 seconds of receiving it
+			trigger_id: body.trigger_id,
+			// View payload
+			view: {
+				type: 'modal',
+				// View identifier
+				private_metadata: payload.channel_id,
+				callback_id: 'create_ticket_model',
+				title: {
+					type: 'plain_text',
+					text: 'Start Ticket'
+				},
+				blocks: [
+					{
+						type: 'input',
+						block_id: 'ticket_name_block',
+						label: {
+							type: 'plain_text',
+							text: 'Ticket Name'
+						},
+						element: {
+							type: 'plain_text_input',
+							action_id: 'title_input',
+							multiline: false,
+						}
+					},
+					{
+						type: 'input',
+						block_id: 'ticket_desc_block',
+						label: {
+							type: 'plain_text',
+							text: 'Description'
+						},
+						element: {
+							type: 'plain_text_input',
+							action_id: 'description_input',
+							multiline: true
+						}
+					}
+				],
+				submit: {
+				    type: 'plain_text',
+				    text: 'Submit'
+				}
+			}
+		});
+		console.log(result.ok);
+	}
+	catch (error) {
+		console.error(error);
+	}
+};
+
+const createTicketCard = async ({ ack, body, view, context, client }) => {
+    // FIELDS: title, description, admin_name, admin_email, admin_sid
+
+	const { title, description, creator_name, creator_sid } = {
+		title: view['state']['values']['ticket_name_block']['title_input']['value'],
+		description: view['state']['values']['ticket_desc_block']['description_input']['value'],
+		creator_name: body['user']['name'],
+		creator_sid: body['user']['id']	
+	};
+
+	// Message the user
+	try {
+		// // Message to send user
+		// let msg = '';
+		
+		// // Save to DB
+		// const results = await Tickets.create({
+		// 	title,
+		// 	description,
+		// 	admin_name,
+		// 	admin_sid
+		// });
+
+		// if (results) {
+		// 	// DB save was successful
+		// 	msg = 'Your submission was successful';
+
+			openTicketCard(ack, client, context.botToken, body.response_url, view.private_metadata, body.user.id, title);
+		// } else {
+		// 	msg = 'There was an error with your submission';
+		// }
+		
+		// console.log(msg)
+	}
+	catch (error) {
+		console.error(error.code, error);
+	}
+};
+
+const openTicketCard = async (ack, client, botToken, responseURL, channelID, userID, ticketName) => {
+	console.log(ack, client, botToken, responseURL, channelID, userID, ticketName)
+};
+
+
 
 const removeMessageBlock = async (module) => {
 	const { ack, body, context, client } = module;
@@ -284,7 +424,7 @@ const removeEphemeralBlock = async (module) => {
 		    headers: { 'Content-Type': 'application/json' },
 		});
 
-		const result = reponse.json();
+		const result = response.json();
 		console.log(result);
 	} catch (err) {
 		console.log(err);
@@ -294,9 +434,15 @@ const removeEphemeralBlock = async (module) => {
 
 module.exports = { 
 	getProjAdminToSayHello, 
-	createSprintCard, 
+	
 	openCreateSprintModel,
+	createSprintCard,
 	openSprintCard,
+
+	openCreateTicketModel,
+	createTicketCard,
+	openTicketCard,
+	
 	removeEphemeralBlock,
 	removeMessageBlock
 };

@@ -1,7 +1,5 @@
 const Sequelize = require('sequelize');
 const database = require('../config/db');
-// const Ticket = require('./Tickets');
-// const Assigned = require('./Assigned.js');
 
 
 const Sprint = database.define('sprints', 
@@ -41,24 +39,6 @@ const Sprint = database.define('sprints',
 	}
 );
 
-const Assigned = database.define('workers_assigned', 
-	{
-		worker_id: {
-			type: Sequelize.INTEGER,
-			allowNull: false
-		},
-		sprint_id: {
-			type: Sequelize.INTEGER,
-			allowNull: false
-		}
-	}
-	,{
-		timestamps: false,
-		underscored: true,
-		freezeTableName: true
-	}
-);
-
 const Workers = database.define('workers', 
 	{
 		name: {
@@ -83,10 +63,83 @@ const Workers = database.define('workers',
 	}
 );
 
+
+const Assigned = database.define('workers_assigned', 
+	{
+		worker_id: {
+			type: Sequelize.INTEGER,
+			allowNull: false
+		},
+		sprint_id: {
+			type: Sequelize.INTEGER,
+			allowNull: false
+		}
+	}
+	,{
+		timestamps: false,
+		underscored: true,
+		freezeTableName: true
+	}
+);
+
+const Tickets = database.define('tickets', 
+	{
+		title: {
+			type: Sequelize.STRING,
+			allowNull: false,
+			unique: true
+		},
+		description: {
+			type: Sequelize.TEXT,
+			allowNull: false
+		},
+		creator_name: {
+			type: Sequelize.STRING,
+			allowNull: false
+		},
+		creator_sid: {
+			type: Sequelize.STRING,
+			allowNull: false
+		},
+		status: {
+			type: Sequelize.BOOLEAN,
+			allowNull: false
+		},
+		created_at: {
+			type: Sequelize.STRING,
+			allowNull: false
+		},
+		updated_at: {
+			type: Sequelize.STRING,
+			allowNull: true
+		},
+		worker_id: {
+			type: Sequelize.STRING,
+			allowNull: false
+		},
+		sprint_id: {
+			type: Sequelize.STRING,
+			allowNull: false
+		}
+	},
+	{
+		timestamps: true,
+		underscored: true,
+		freezeTableName: true
+	}
+);
+
 Sprint.hasMany(Assigned);
+Sprint.hasMany(Tickets);
+
 Workers.hasMany(Assigned);
+Workers.hasMany(Tickets);
+
 Assigned.belongsTo(Sprint);
 Assigned.belongsTo(Workers);
 
+Tickets.belongsTo(Workers);
+Tickets.belongsTo(Sprint);
 
-module.exports = { Sprint, Assigned, Workers };
+
+module.exports = { Sprint, Assigned, Workers, Tickets };
