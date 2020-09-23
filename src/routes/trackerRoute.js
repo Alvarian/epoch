@@ -1,7 +1,8 @@
 const { 
 	getProjAdminToSayHello, 
-	createProjectSprint, 
+	createSprintCard, 
 	openCreateSprintModel,
+	openSprintCard,
 	removeEphemeralBlock,
 	removeMessageBlock
 } = require('../controllers/trackerController');
@@ -24,6 +25,12 @@ const trackCommandRoutes = (module) => {
 			openCreateSprintModel(module, project);
 			
 			break;
+		// client, botToken, responseURL, channelID, userID, sprintName
+		case 'open sprint':
+			const { client, context, body, ack } = module;
+			openSprintCard(ack, client, context.botToken, body.response_url, body.channel_id, body.user_id, project);
+			
+			break;
 
 		default:
 			console.log('no match');
@@ -32,7 +39,7 @@ const trackCommandRoutes = (module) => {
 };
 
 const trackerActionRoutes = (app) => {
-	app.view('create_sprint_model', createProjectSprint);
+	app.view('create_sprint_model', createSprintCard);
 
 	app.action('close_message', removeMessageBlock);
 	app.action('close_ephemeral', removeEphemeralBlock);

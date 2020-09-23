@@ -1,23 +1,27 @@
 const cacheClient = require('../config/cache');
-const Projects = require('../models/Projects');
+const { Sprint, Assigned, Workers } = require('../models/Tracker');
+// const Assigned = require('../models/Assigned');
 const fetch = require('node-fetch');
-const axios = require('axios');
 
 
 function cacheIfFieldDoesNotExist(paramFromRequest) {
 	return new Promise((resolve, reject) => {
-		cacheClient.get(paramFromRequest, async (err, data) => {
+		cacheClient.get(paramFromRequest, async (err, cachedData) => {
 			if (err) throw err;
 
-			if (data !== null) {				
-				resolve(data);
+			if (cachedData !== null) {	
+				resolve(JSON.parse(cachedData));
 			} else {
-				const { admin_name } = await Projects.findOne({ where: { title: paramFromRequest } });
-				
-				// cache
-				cacheClient.setex(paramFromRequest, 60, `${admin_name} <- CACHED`);
-				
-				resolve(admin_name);
+				try {
+					const dbData = await Sprint.findAll({ include: [{model: Assigned, include: [Workers]}] });
+// console.log(dbData[0].workers_assigneds[0].worker)
+					// cache
+					cacheClient.setex(paramFromRequest, 60, JSON.stringify(dbData[0]));
+					
+					resolve(dbData[0]);
+				} catch (err) {
+					reject(err);
+				}
 			}
 		});
 	});
@@ -27,9 +31,9 @@ const getProjAdminToSayHello = async ({ say, ack }, param) => {
 	try {
 		await ack();
 
-		const adminName = await cacheIfFieldDoesNotExist(param);
+		const data = await cacheIfFieldDoesNotExist(param);
 
-		await say(`Hi, I am ${adminName}.`);
+		await say(`Hi, I am ${data.admin_name}.`);
 	} catch (err) {
 		console.log(err);
 	}
@@ -98,7 +102,7 @@ const openCreateSprintModel =  async ({ ack, body, client, payload }, sprintName
   }
 };
 
-const createProjectSprint =  async (module) => {
+const createSprintCard =  async (module) => {
 	const { ack, body, view, context, client } = module;
     // FIELDS: title, description, admin_name, admin_email, admin_sid
 	const title = view['state']['values']['project_name_block']['title_input']['value'];
@@ -109,93 +113,136 @@ const createProjectSprint =  async (module) => {
 	// Message the user
 	try {
 		// Acknowledge the view_submission event
-		await ack();
+		// await ack();
 		
-		// // Message to send user
-		// let msg = '';
+		// Message to send user
+		let msg = '';
 		
-		// // Save to DB
-		// const results = await Projects.create({
-		// 	title,
-		// 	description,
-		// 	admin_name,
-		// 	admin_sid
-		// });
+		// Save to DB
+		const results = await Sprint.create({
+			title,
+			description,
+			admin_name,
+			admin_sid
+		});
 
-		// if (results) {
-		// 	// DB save was successful
-		// 	msg = 'Your submission was successful';
+		if (results) {
+			// DB save was successful
+			msg = 'Your submission was successful';
 
-			const result = await client.chat.postEphemeral({
-				// The token you used to initialize your app is stored in the `context` object
-				token: context.botToken,
-				// Payload message should be posted in the channel where original message was heard
-				channel: view.private_metadata,
-				user: body.user.id,
-				private_metadata: body.response_url,
-				"blocks": [
-					{
-						"type": "section",
-						"text": {
-							"type": "mrkdwn",
-							"text": "Danny Torrence left the following review for your property:"
-						}
-					},
-					{
-						"type": "section",
-						"block_id": "section567",
-						"text": {
-							"type": "mrkdwn",
-							"text": "<https://google.com|Overlook Hotel> \n :star: \n Doors had too many axe holes, guest in room 237 was far too rowdy, whole place felt stuck in the 1920s."
-						},
-						"accessory": {
-							"type": "image",
-							"image_url": "https://is5-ssl.mzstatic.com/image/thumb/Purple3/v4/d3/72/5c/d3725c8f-c642-5d69-1904-aa36e4297885/source/256x256bb.jpg",
-							"alt_text": "Haunted hotel image"
-						}
-					},
-					{
-						"type": "section",
-						"block_id": "section789",
-						"fields": [
-							{
-							"type": "mrkdwn",
-							"text": "*Average Rating*\n1.0"
-							}
-						]
-					},
-					{
-						"type": "actions",
-						"elements": [
-							{
-								"type": "button",
-								"text": {
-									"type": "plain_text",
-									"text": "Close",
-									"emoji": true
-								},
-								"style": "danger",
-								"action_id": "close_ephemeral"
-							}
-						]
-					}
-				]
-			});
-
-			console.log(result.ok);
-		// 	// Open sprint card with fields of: title, description, admin, workersInvolved, status, createdAt, updatedAt, buttons(edit, delete, addNewTicket) 
-
-		// } else {
-		// 	msg = 'There was an error with your submission';
-		// }
+			openSprintCard(ack, client, context.botToken, body.response_url, view.private_metadata, body.user.id, title);
+		} else {
+			msg = 'There was an error with your submission';
+		}
 		
-		// console.log(msg)
+		console.log(msg)
 	}
 	catch (error) {
 		console.error(error.code, error);
 	}
+};
 
-}
+const openSprintCard = async (ack, client, botToken, responseURL, channelID, userID, sprintName) => {
+	// sprint card <title, description, involvedWorkers, createdAt, updatedAt, status, ticketList<>, 
+	// buttons(assigned: [nothing], admin: [editSprint<>, delete<Prompt Card>], else: [request involvement<Request Card>])>
+	
+	try {
+		await ack();
+
+		const data = await cacheIfFieldDoesNotExist(sprintName);
+
+		const payload = { title, description, admin, createdAt, updatedAt } = {
+			title: data.title.toUpperCase(),
+			description: data.description,
+			admin: data.admin_name,
+			createdAt: data.createdAt,
+			updatedAt: data.updatedAt,
+			workers_assigned: data.workers_assigneds
+		};
+
+console.log(payload);
+
+		const result = await client.chat.postEphemeral({
+			// The token you used to initialize your app is stored in the `context` object
+			token: botToken,
+			// Payload message should be posted in the channel where original message was heard
+			channel: channelID,
+			user: userID,
+			private_metadata: responseURL,
+			"blocks": [
+				{
+					"type": "header",
+					"text": {
+						"type": "plain_text",
+						"text": title
+					}
+				},
+				{
+					"type": "context",
+					"elements": [
+						{
+							"text": `${description}`,
+							"type": "mrkdwn"
+						}
+					]
+				},
+				{
+					"type": "context",
+					"elements": [
+						{
+							"text": `${createdAt}`,
+							"type": "mrkdwn"
+						}
+					]
+				},
+				{
+					"type": "divider"
+				},
+				{
+					"type": "section",
+					"text": {
+						"type": "mrkdwn",
+						"text": " :checkered_flag: *TICKETS* :checkered_flag:"
+					}
+				},
+				{
+					"type": "section",
+					"text": {
+						"type": "mrkdwn",
+						"text": "Replay our screening of *Threat Level Midnight* and pick up a copy of the DVD to give to your customers at the front desk."
+					},
+					"accessory": {
+						"type": "button",
+						"text": {
+							"type": "plain_text",
+							"text": "Watch Now",
+							"emoji": true
+						}
+					}
+				},
+				{
+					"type": "actions",
+					"elements": [
+						{
+							"type": "button",
+							"text": {
+								"type": "plain_text",
+								"text": "Close",
+								"emoji": true
+							},
+							"style": "danger",
+							"action_id": "close_ephemeral"
+						}
+					]
+				}
+			]
+		});
+
+		console.log(result.ok);
+	} catch (err) {
+		console.log(err);
+	}
+};
 
 const removeMessageBlock = async (module) => {
 	const { ack, body, context, client } = module;
@@ -236,7 +283,7 @@ const removeEphemeralBlock = async (module) => {
 		    body:    JSON.stringify(payload),
 		    headers: { 'Content-Type': 'application/json' },
 		});
-		
+
 		const result = reponse.json();
 		console.log(result);
 	} catch (err) {
@@ -247,8 +294,9 @@ const removeEphemeralBlock = async (module) => {
 
 module.exports = { 
 	getProjAdminToSayHello, 
-	createProjectSprint, 
-	openCreateSprintModel, 
+	createSprintCard, 
+	openCreateSprintModel,
+	openSprintCard,
 	removeEphemeralBlock,
 	removeMessageBlock
 };
