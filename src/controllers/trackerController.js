@@ -3,7 +3,45 @@ const { Sprint, Assigned, Workers, Tickets } = require('../models/Tracker');
 const fetch = require('node-fetch');
 
 
-function cacheIfFieldDoesNotExist(paramFromRequest) {
+function cacheIfFieldDoesNotExist(paramFromRequest, paramType, queryObj=null) {
+	switch (paramType) {
+		case 'ticketByID':
+			queryObj = {
+				include: [
+					{
+						model: Assigned,
+						include: [Workers]
+					},
+					{
+						model: Tickets,
+						where: {
+							id: paramFromRequest
+						},
+						include: [Workers]
+					}
+				]
+			};
+			break;
+
+		case 'sprintByTitle':
+			queryObj = {
+				where: {
+					title: paramFromRequest
+				},
+				include: [
+					{
+						model: Assigned,
+						include: [Workers]
+					},
+					{
+						model: Tickets,
+						include: [Workers]
+					}
+				]
+			};
+			break;
+	}
+
 	return new Promise((resolve, reject) => {
 		cacheClient.get(paramFromRequest, async (err, cachedData) => {
 			if (err) throw err;
@@ -12,13 +50,10 @@ function cacheIfFieldDoesNotExist(paramFromRequest) {
 				resolve(JSON.parse(cachedData));
 			} else {
 				try {
-					const dbData = await Sprint.findAll({ include: [
-						{model: Assigned, include: [Workers]},
-						{model: Tickets, include: [Workers]}]
-					});
+					const dbData = await Sprint.findAll(queryObj);
 
 					// cache
-					cacheClient.setex(paramFromRequest, 60, JSON.stringify(dbData[0]));
+					cacheClient.setex(paramType.concat(paramFromRequest), 60, JSON.stringify(dbData[0]));
 					
 					resolve(dbData[0]);
 				} catch (err) {
@@ -33,9 +68,9 @@ const getProjAdminToSayHello = async ({ say, ack }, param) => {
 	try {
 		await ack();
 
-		const data = await cacheIfFieldDoesNotExist(param);
-	// <@U024BE7LH>
-		await say(`Hi, I am ${data.admin_name}.`);
+		const data = await cacheIfFieldDoesNotExist(param, 'sprintByTitle');
+
+		await say(`Hi, I am <@${data.admin_sid}>.`);
 	} catch (err) {
 		console.log(err);
 	}
@@ -126,7 +161,8 @@ const createSprintCard =  async ({ ack, body, view, context, client }) => {
 			title,
 			description,
 			admin_name,
-			admin_sid
+			admin_sid,
+			status: false
 		});
 
 		if (results) {
@@ -145,16 +181,12 @@ const createSprintCard =  async ({ ack, body, view, context, client }) => {
 	}
 };
 
-const openSprintCard = async (ack, client, botToken, responseURL, channelID, userID, sprintName) => {
-	// sprint card <title, description, involvedWorkers, createdAt, updatedAt, status, ticketList<>, 
-	// buttons(assigned: [nothing], admin: [editSprint<>, delete<Prompt Card>], else: [request involvement<Request Card>])>
-	
+const makeSprintBlock = async (client, botToken, channelID, userID, sprintName) => {
 	try {
-		await ack();
+		const data = await cacheIfFieldDoesNotExist(sprintName, 'sprintByTitle');
 
-		const data = await cacheIfFieldDoesNotExist(sprintName);
-
-		const payload = { title, description, admin, createdAt, updatedAt, tickets } = {
+		const sprintPayload = { id, title, description, admin, createdAt, updatedAt, tickets } = {
+			id: data.id,
 			title: data.title.toUpperCase(),
 			description: data.description,
 			admin: data.admin_name,
@@ -221,13 +253,13 @@ const openSprintCard = async (ack, client, botToken, responseURL, channelID, use
 			})
 		} else {
 			tickets.forEach(ticket => {
-				const { title, createdAt, creator_name, status } = ticket;
+				const { title, createdAt, creator_sid, status } = ticket;
 
 				blocksPayload.blocks.push({
 					"type": "section",
 					"text": {
 						"type": "mrkdwn",
-						"text": `*${title}* ${createdAt} ${creator_name} ${status}`
+						"text": `*${title}* ${createdAt} <@${creator_sid}> ${status}`
 					},
 					"accessory": {
 						"type": "button",
@@ -236,6 +268,7 @@ const openSprintCard = async (ack, client, botToken, responseURL, channelID, use
 							"text": "Review Ticket",
 							"emoji": true
 						},
+						value: `${ticket.id}`,
 						"action_id": "open_ticket"
 					}
 				});
@@ -252,6 +285,7 @@ const openSprintCard = async (ack, client, botToken, responseURL, channelID, use
 						"text": "Create Ticket",
 						"emoji": true
 					},
+					value: `${id}`,
 					"style": "primary",
 					"action_id": "open_ticket_model"
 				},
@@ -269,9 +303,19 @@ const openSprintCard = async (ack, client, botToken, responseURL, channelID, use
 		};
 		blocksPayload.blocks.push(finalBlock);
 
-		const result = await client.chat.postEphemeral(blocksPayload);
+		return blocksPayload;
+	} catch (err) {
+		console.log(err)
+	}
+};
 
-		console.log(result.ok);
+const openSprintCard = async (ack, client, botToken, responseURL, channelID, userID, sprintName) => {
+	try {
+		await ack();
+
+		const blocksPayload = await makeSprintBlock(client, botToken, channelID, userID, sprintName);
+
+		await client.chat.postEphemeral(blocksPayload);
 	} catch (err) {
 		console.log(err);
 	}
@@ -279,20 +323,18 @@ const openSprintCard = async (ack, client, botToken, responseURL, channelID, use
 
 
 
-const openCreateTicketModel = async ({ ack, body, client, payload }) => {
+const openCreateTicketModel = async (ack, client, sprintPayload, triggerID) => {
 	try {
 		await ack();
 
-		// Call views.open with the built-in client
-		// FIELDS: title, description, admin_name, admin_email, admin_sid
 		const result = await client.views.open({
 			// Pass a valid trigger_id within 3 seconds of receiving it
-			trigger_id: body.trigger_id,
+			trigger_id: triggerID,
 			// View payload
 			view: {
 				type: 'modal',
 				// View identifier
-				private_metadata: payload.channel_id,
+				private_metadata: JSON.stringify(sprintPayload),
 				callback_id: 'create_ticket_model',
 				title: {
 					type: 'plain_text',
@@ -324,6 +366,24 @@ const openCreateTicketModel = async ({ ack, body, client, payload }) => {
 							action_id: 'description_input',
 							multiline: true
 						}
+					},
+					{
+						"type": "section",
+						block_id: 'ticket_select_block',
+						"text": {
+							"type": "mrkdwn",
+							"text": "Assign Developer"
+						},
+						"accessory": {
+							action_id: 'select_input',
+							"type": "users_select",
+							initial_user: sprintPayload.selectedUser || sprintPayload.initialUser,
+							"placeholder": {
+								"type": "plain_text",
+								"text": "Select a user",
+								"emoji": true
+							}
+						}
 					}
 				],
 				submit: {
@@ -339,50 +399,269 @@ const openCreateTicketModel = async ({ ack, body, client, payload }) => {
 	}
 };
 
-const createTicketCard = async ({ ack, body, view, context, client }) => {
+const createTicketCard = async (module) => {
     // FIELDS: title, description, admin_name, admin_email, admin_sid
+    const { ack, body, view, context, client } = module;
 
-	const { title, description, creator_name, creator_sid } = {
+    const ticketParams = {
+    	sprint_id, channel_id, responseURL, initialUser, selectedUser
+    } = JSON.parse(view.private_metadata);
+
+	const { title, description, creator_name, creator_sid, status } = {
 		title: view['state']['values']['ticket_name_block']['title_input']['value'],
 		description: view['state']['values']['ticket_desc_block']['description_input']['value'],
 		creator_name: body['user']['name'],
-		creator_sid: body['user']['id']	
+		creator_sid: body['user']['id'],
+		status: false
 	};
 
-	// Message the user
 	try {
-		// // Message to send user
-		// let msg = '';
-		
-		// // Save to DB
-		// const results = await Tickets.create({
-		// 	title,
-		// 	description,
-		// 	admin_name,
-		// 	admin_sid
-		// });
+		const worker = await client.users.info({
+			token: client.token,
+			user: selectedUser || initialUser
+		});
 
-		// if (results) {
-		// 	// DB save was successful
-		// 	msg = 'Your submission was successful';
+		const findOrRegisterWorker = async () => {
+			const isWorker = await Workers.findOne({
+				where: { name: worker.user.name }
+			});
 
-			openTicketCard(ack, client, context.botToken, body.response_url, view.private_metadata, body.user.id, title);
-		// } else {
-		// 	msg = 'There was an error with your submission';
-		// }
+			if (!isWorker) {
+				const workerResults = await Workers.create({
+					name: worker.user.name,
+					role: worker.user.profile.title,
+					sid: worker.user.id
+				});
+
+				return workerResults.id
+			} else {
+				return isWorker.id
+			}
+		};
+
+		const ticketResults = await Tickets.create({
+			title,
+			description,
+			creator_name,
+			creator_sid,
+			status,
+			sprint_id,
+			worker_id: await findOrRegisterWorker()
+		});
+
+		let msg = '';
 		
-		// console.log(msg)
+		if (ticketResults) {
+			// DB save was successful
+			msg = 'Your submission was successful';
+
+			openTicketCard(ack, client, context.botToken, responseURL, channel_id, ticketResults.id, body.user.id);
+		} else {
+			msg = 'There was an error with your submission';
+		}
+		
+		console.log(msg)
 	}
 	catch (error) {
 		console.error(error.code, error);
 	}
 };
 
-const openTicketCard = async (ack, client, botToken, responseURL, channelID, userID, ticketName) => {
-	console.log(ack, client, botToken, responseURL, channelID, userID, ticketName)
+const openTicketCard = async (ack, client, responseURL, ticketID, userID) => {
+	try {
+		await ack();
+
+		const data = await cacheIfFieldDoesNotExist(ticketID, 'ticketByID');
+
+		const ticketPayload = { id, title, description, creator_sid, createdAt, updatedAt, worker_sid, worker_role, status } = {
+			id: data.tickets[0].id,
+			title: data.tickets[0].title.toUpperCase(),
+			description: data.tickets[0].description,
+			creator_sid: data.tickets[0].creator_sid,
+			createdAt: data.tickets[0].createdAt,
+			updatedAt: data.tickets[0].updatedAt,
+			worker_sid: data.tickets[0].worker.sid,
+			worker_role: data.tickets[0].worker.role,
+			status: (data.tickets[0].status) ? "Done" : "In progress"
+		};
+
+		const blocks = {
+		    'response_type': 'ephemeral',
+		    'replace_original': true,
+		    "blocks": [
+				{
+					"type": "header",
+					"text": {
+						"type": "plain_text",
+						"text": `${title}`
+					}
+				},
+				{
+					"type": "context",
+					"elements": [
+						{
+							"text": `${description}`,
+							"type": "mrkdwn"
+						}
+					]
+				},
+				{
+					"type": "context",
+					"elements": [
+						{
+							"text": `Posted on ${createdAt}`,
+							"type": "mrkdwn"
+						}
+					]
+				},
+				{
+					"type": "section",
+					"fields": [
+						{
+							"type": "mrkdwn",
+							"text": `*Posted by:*\n <@${creator_sid}>`
+						},
+						{
+							"type": "mrkdwn",
+							"text": `*Status:*\n${status}`
+						},
+						{
+							"type": "mrkdwn",
+							"text": `*Engineer:*\n <@${worker_sid}> - ${worker_role}`
+						}
+					]
+				},
+				{
+					"type": "divider"
+				},
+				{
+					"type": "actions",
+					"elements": [
+						{
+							"type": "button",
+							"text": {
+								"type": "plain_text",
+								"text": "Back to sprint",
+								"emoji": true
+							},
+							value: `sprint_${data.title}`,
+							"action_id": "back_to"
+						},
+						{
+							"type": "button",
+							"text": {
+								"type": "plain_text",
+								"text": "Close",
+								"emoji": true
+							},
+							"style": "danger",
+							"action_id": "close_ephemeral"
+						}
+					]
+				}
+			]
+		};
+
+		replaceEphemeralBlock(responseURL, blocks);
+	} catch (err) {
+		console.log(err);
+	}
+};
+
+const updateTicketModelOnSelectChange = async ({ ack, client, body: {view:{id, type, title, blocks, submit, private_metadata, callback_id}}, payload, context }) => {
+	const { sprint_id, channel_id, responseURL } = JSON.parse(private_metadata);
+	const sprintPayload = {
+		sprint_id, 
+		channel_id, 
+		responseURL,
+		initialUser: payload.initial_user,
+		selectedUser: payload.selected_user
+	};
+
+	try {
+		const results = await client.views.update({
+			token: context.botToken,
+			view: {
+				type: 'modal',
+				// View identifier
+				private_metadata: JSON.stringify(sprintPayload),
+				callback_id: 'create_ticket_model',
+				title: {
+					type: 'plain_text',
+					text: 'Start Ticket'
+				},
+				blocks: [
+					{
+						type: 'input',
+						block_id: 'ticket_name_block',
+						label: {
+							type: 'plain_text',
+							text: 'Ticket Name'
+						},
+						element: {
+							type: 'plain_text_input',
+							action_id: 'title_input',
+							multiline: false,
+						}
+					},
+					{
+						type: 'input',
+						block_id: 'ticket_desc_block',
+						label: {
+							type: 'plain_text',
+							text: 'Description'
+						},
+						element: {
+							type: 'plain_text_input',
+							action_id: 'description_input',
+							multiline: true
+						}
+					},
+					{
+						"type": "section",
+						block_id: 'ticket_select_block',
+						"text": {
+							"type": "mrkdwn",
+							"text": "Assign Developer"
+						},
+						"accessory": {
+							action_id: 'select_input',
+							"type": "users_select",
+							initial_user: sprintPayload.selectedUser || sprintPayload.initialUser,
+							"placeholder": {
+								"type": "plain_text",
+								"text": "Select a user",
+								"emoji": true
+							}
+						}
+					}
+				],
+				submit: {
+				    type: 'plain_text',
+				    text: 'Submit'
+				}
+			},
+			view_id: id
+		});
+	} catch (err) {console.log(err)}
 };
 
 
+
+const replaceEphemeralBlock = async (responseURL, blocks) => {
+	try {
+		const response = await fetch(responseURL, {
+		    method: 'post',
+		    body:    JSON.stringify(blocks),
+		    headers: { 'Content-Type': 'application/json' },
+		});
+
+		const result = await response.json();
+		console.log(result);
+	} catch (err) {
+		console.log(err);
+	}
+};
 
 const removeMessageBlock = async (module) => {
 	const { ack, body, context, client } = module;
@@ -406,15 +685,12 @@ const removeMessageBlock = async (module) => {
 };
 
 const removeEphemeralBlock = async (module) => {
-	const { ack, body, context, client, axios, respond } = module;
+	const { ack, body, context, client } = module;
 
 	try {
 		await ack();
 
 		const payload = {
-		    'response_type': 'ephemeral',
-		    'text': '',
-		    'replace_original': true,
 		    'delete_original': true
 		};
 
@@ -437,12 +713,15 @@ module.exports = {
 	
 	openCreateSprintModel,
 	createSprintCard,
+	makeSprintBlock,
 	openSprintCard,
 
 	openCreateTicketModel,
 	createTicketCard,
 	openTicketCard,
-	
+	updateTicketModelOnSelectChange,
+
+	replaceEphemeralBlock,
 	removeEphemeralBlock,
 	removeMessageBlock
 };

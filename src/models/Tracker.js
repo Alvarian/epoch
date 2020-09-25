@@ -21,6 +21,10 @@ const Sprint = database.define('sprints',
 			type: Sequelize.STRING,
 			allowNull: false
 		},
+		status: {
+			type: Sequelize.BOOLEAN,
+			allowNull: false
+		},
 		
 		// Timestamps
 		createdAt: {
@@ -105,14 +109,6 @@ const Tickets = database.define('tickets',
 			type: Sequelize.BOOLEAN,
 			allowNull: false
 		},
-		created_at: {
-			type: Sequelize.STRING,
-			allowNull: false
-		},
-		updated_at: {
-			type: Sequelize.STRING,
-			allowNull: true
-		},
 		worker_id: {
 			type: Sequelize.STRING,
 			allowNull: false
@@ -120,6 +116,16 @@ const Tickets = database.define('tickets',
 		sprint_id: {
 			type: Sequelize.STRING,
 			allowNull: false
+		},
+		
+		// Timestamps
+		createdAt: {
+			type: Sequelize.DATE,
+			field: 'created_at'
+		},
+		updatedat: {
+			type: Sequelize.DATE,
+			field: 'updated_at'
 		}
 	},
 	{
