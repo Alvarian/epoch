@@ -23,6 +23,24 @@ function cacheIfFieldDoesNotExist(paramFromRequest, paramType, queryObj=null) {
 			};
 			break;
 
+		case 'sprintByID':
+			queryObj = {
+				where: {
+					id: paramFromRequest
+				},
+				include: [
+					{
+						model: Assigned,
+						include: [Workers]
+					},
+					{
+						model: Tickets,
+						include: [Workers]
+					}
+				]
+			};
+			break;
+
 		case 'sprintByTitle':
 			queryObj = {
 				where: {
@@ -399,72 +417,191 @@ const openCreateTicketModel = async (ack, client, sprintPayload, triggerID) => {
 	}
 };
 
-const createTicketCard = async (module) => {
-    // FIELDS: title, description, admin_name, admin_email, admin_sid
-    const { ack, body, view, context, client } = module;
-
-    const ticketParams = {
-    	sprint_id, channel_id, responseURL, initialUser, selectedUser
-    } = JSON.parse(view.private_metadata);
-
-	const { title, description, creator_name, creator_sid, status } = {
-		title: view['state']['values']['ticket_name_block']['title_input']['value'],
-		description: view['state']['values']['ticket_desc_block']['description_input']['value'],
-		creator_name: body['user']['name'],
-		creator_sid: body['user']['id'],
-		status: false
-	};
+const createTicketConfirmation = async ({ ack, client, payload, body }) => {
+	const { 
+		title, 
+		description,
+		creator_name,
+		creator_sid,
+		status,
+		sprint_id,
+		channel_id,
+		responseURL,
+		initialUser,
+		selectedUser,
+		decision
+	} = JSON.parse(payload.value);
 
 	try {
-		const worker = await client.users.info({
-			token: client.token,
-			user: selectedUser || initialUser
-		});
+		await ack();
 
-		const findOrRegisterWorker = async () => {
-			const isWorker = await Workers.findOne({
-				where: { name: worker.user.name }
-			});
-
-			if (!isWorker) {
-				const workerResults = await Workers.create({
-					name: worker.user.name,
-					role: worker.user.profile.title,
-					sid: worker.user.id
+		if (decision) {
+			const findOrRegisterWorker = async () => {
+				const worker = await client.users.info({
+					token: client.token,
+					user: selectedUser || initialUser
 				});
 
-				return workerResults.id
+				const isWorker = await Workers.findOne({
+					where: { name: worker.user.name }
+				});
+
+				if (!isWorker) {
+					const workerResults = await Workers.create({
+						name: worker.user.name,
+						role: worker.user.profile.title,
+						sid: worker.user.id
+					});
+
+					return workerResults.id
+				} else {
+					return isWorker.id
+				}
+			};
+
+			const ticketResults = await Tickets.create({
+				title,
+				description,
+				creator_name,
+				creator_sid,
+				status,
+				sprint_id,
+				worker_id: await findOrRegisterWorker()
+			});
+
+			let msg = '';
+			
+			if (ticketResults) {
+				// DB save was successful
+				msg = 'Your submission was successful';
+
+				replaceEphemeralBlock(body.response_url, {
+					replace_original: true,
+					text: `:heavy_check_mark: You accepted request for ticket *"${title.toUpperCase()}"* at ${new Date()}`				
+				});
+
+				client.chat.postMessage({
+					token: client.token,
+					channel: creator_sid,
+					text: `:heavy_check_mark: <@${selectedUser || initialUser}> accepted request for ticket *"${title.toUpperCase()}"* at ${new Date()}`
+				});
 			} else {
-				return isWorker.id
+				msg = 'There was an error with your submission';
 			}
-		};
-
-		const ticketResults = await Tickets.create({
-			title,
-			description,
-			creator_name,
-			creator_sid,
-			status,
-			sprint_id,
-			worker_id: await findOrRegisterWorker()
-		});
-
-		let msg = '';
-		
-		if (ticketResults) {
-			// DB save was successful
-			msg = 'Your submission was successful';
-
-			openTicketCard(ack, client, context.botToken, responseURL, channel_id, ticketResults.id, body.user.id);
+			
+			console.log(msg)
 		} else {
-			msg = 'There was an error with your submission';
+			replaceEphemeralBlock(body.response_url, {
+				replace_original: true,
+				text: `:x: You rejected request for ticket *"${title.toUpperCase()}"* at ${new Date()}`
+			});
+			
+			client.chat.postMessage({
+				token: client.token,
+				channel: creator_sid,
+				text: `:x: <@${selectedUser || initialUser}> rejected request for ticket *"${title.toUpperCase()}"* at ${new Date()}`				
+			});
 		}
-		
-		console.log(msg)
 	}
 	catch (error) {
 		console.error(error.code, error);
 	}
+};
+
+const createTicketCard = async ({ ack, body, view, context, client }) => {
+    const ticketParams = {
+    	sprint_id, channel_id, responseURL, initialUser, selectedUser
+    } = JSON.parse(view.private_metadata);
+
+	const data = await cacheIfFieldDoesNotExist(sprint_id, 'sprintByID');
+
+	const content = { title, description, creator_sid, sprint_name } = {
+		title: view['state']['values']['ticket_name_block']['title_input']['value'],
+		description: view['state']['values']['ticket_desc_block']['description_input']['value'],
+		creator_name: body['user']['name'],
+		creator_sid: body['user']['id'],
+		status: false,
+		sprint_name: data.title,
+		sprint_id,
+		channel_id,
+		responseURL,
+		initialUser,
+		selectedUser
+	};
+
+	const ticketContentPayload = (decision) => {
+		content.decision = decision;
+
+		return content;
+	};
+	
+	client.chat.postMessage({
+		token: context.botToken,
+		channel: selectedUser || initialUser,
+		"blocks": [
+			{
+				"type": "header",
+				"text": {
+					"type": "plain_text",
+					"text": "New Ticket Request"
+				}
+			},
+			{
+				"type": "context",
+				"elements": [
+					{
+						"text": `*${title.toUpperCase()}*`,
+						"type": "mrkdwn"
+					}
+				]
+			},
+			{
+				"type": "context",
+				"elements": [
+					{
+						"text": `${description}`,
+						"type": "mrkdwn"
+					}
+				]
+			},
+			{
+				"type": "section",
+				"text": {
+					"type": "mrkdwn",
+					"text": "```Sprint Name: "+data.title.toUpperCase()+"\nSprint Admin: <@"+creator_sid+">```"
+				}
+			},
+			{
+				"type": "actions",
+				"elements": [
+					{
+						"type": "button",
+						"text": {
+							"type": "plain_text",
+							"emoji": true,
+							"text": "Approve"
+						},
+						"style": "primary",
+						"value": JSON.stringify(ticketContentPayload(true)),
+						action_id: 'ticket_accepted'
+					},
+					{
+						"type": "button",
+						"text": {
+							"type": "plain_text",
+							"emoji": true,
+							"text": "Deny"
+						},
+						"style": "danger",
+						"value": JSON.stringify(ticketContentPayload(false)),
+						action_id: 'ticket_declined'
+					}
+				]
+			}
+		]
+	});
+
+	ack();
 };
 
 const openTicketCard = async (ack, client, responseURL, ticketID, userID) => {
@@ -545,7 +682,7 @@ const openTicketCard = async (ack, client, responseURL, ticketID, userID) => {
 								"emoji": true
 							},
 							value: `sprint_${data.title}`,
-							"action_id": "back_to"
+							"action_id": "redirect"
 						},
 						{
 							"type": "button",
@@ -579,6 +716,8 @@ const updateTicketModelOnSelectChange = async ({ ack, client, body: {view:{id, t
 	};
 
 	try {
+		await ack();
+
 		const results = await client.views.update({
 			token: context.botToken,
 			view: {
@@ -717,6 +856,7 @@ module.exports = {
 	openSprintCard,
 
 	openCreateTicketModel,
+	createTicketConfirmation,
 	createTicketCard,
 	openTicketCard,
 	updateTicketModelOnSelectChange,

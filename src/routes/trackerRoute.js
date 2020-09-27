@@ -7,6 +7,7 @@ const {
 	openSprintCard,
 
 	openCreateTicketModel,
+	createTicketConfirmation,
 	createTicketCard,
 	openTicketCard,
 	updateTicketModelOnSelectChange,
@@ -53,6 +54,9 @@ const trackerActionRoutes = (app) => {
 	app.view('create_ticket_model', createTicketCard);
 
 
+	app.action('ticket_declined', createTicketConfirmation);
+	app.action('ticket_accepted', createTicketConfirmation);
+
 	app.action('select_input', updateTicketModelOnSelectChange);
 
 	app.action('open_ticket_model', async ({ ack, client, body, payload }) => {
@@ -73,7 +77,7 @@ const trackerActionRoutes = (app) => {
 		openTicketCard(ack, client, body.response_url, payload.value, body.user.id);
 	});
 
-	app.action('back_to', async ({client, context, body, payload}, blocks=null) => {
+	app.action('redirect', async ({client, context, body, payload}, blocks=null) => {
 		const { blockSrc, blockID } = {
 			blockSrc: payload.value.split('_')[0],
 			blockID: payload.value.split('_')[1]
@@ -88,6 +92,7 @@ const trackerActionRoutes = (app) => {
 		replaceEphemeralBlock(body.response_url, blocks);
 	});
 	
+
 	app.action('close_message', removeMessageBlock);
 	app.action('close_ephemeral', removeEphemeralBlock);
 };
