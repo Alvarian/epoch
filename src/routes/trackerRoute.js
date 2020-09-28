@@ -9,7 +9,9 @@ const {
 	openCreateTicketModel,
 	createTicketConfirmation,
 	createTicketCard,
+	makeTicketBlock,
 	openTicketCard,
+	changeTicketStatus,
 	updateTicketModelOnSelectChange,
 
 	removeEphemeralBlock,
@@ -18,7 +20,7 @@ const {
 } = require('../controllers/trackerController');
 
 
-const trackCommandRoutes = (module) => {
+const trackCommandRoutes = module => {
 	const { message, say, command } = module;
 
 	// params to point to controller
@@ -49,7 +51,7 @@ const trackCommandRoutes = (module) => {
 	}
 };
 
-const trackerActionRoutes = (app) => {
+const trackerActionRoutes = app => {
 	app.view('create_sprint_model', createSprintCard);
 	app.view('create_ticket_model', createTicketCard);
 
@@ -77,21 +79,53 @@ const trackerActionRoutes = (app) => {
 		openTicketCard(ack, client, body.response_url, payload.value, body.user.id);
 	});
 
-	app.action('redirect', async ({client, context, body, payload}, blocks=null) => {
-		const { blockSrc, blockID } = {
-			blockSrc: payload.value.split('_')[0],
-			blockID: payload.value.split('_')[1]
-		};
+	app.action('redirect_from_back', async ({context, body, payload}, blocks=null) => {
+		const redirectPayload = { 
+			blockSrc, 
+			blockID,  
+			ticketID 
+		} = JSON.parse(payload.value);
 
 		switch (blockSrc) {
 			case 'sprint':
-				blocks = await makeSprintBlock(client, context.botToken, body.container.channel_id, body.user.id, blockID);
+				blocks = await makeSprintBlock(context.botToken, body.container.channel_id, body.user.id, blockID);
 				break;
 		}
 
 		replaceEphemeralBlock(body.response_url, blocks);
 	});
-	
+
+	app.action('redirect_from_status', async ({context, body, payload}) => {
+		const redirectPayload = {
+			blockSrc, 
+			blockID,
+			selectedStatus, 
+			ticketID 
+		} = JSON.parse(payload.value);
+
+		switch (blockSrc) {
+			case 'sprint':
+				changeTicketStatus(selectedStatus, ticketID)
+					.then(async () => {
+						const blocks = await makeSprintBlock(context.botToken, body.container.channel_id, body.user.id, blockID);
+						
+						replaceEphemeralBlock(body.response_url, blocks);
+					});
+
+				break;
+
+			case 'ticket':
+				changeTicketStatus(selectedStatus, ticketID)
+					.then(async () => {
+						blocks = await makeTicketBlock(ticketID, body.user.id);
+
+						replaceEphemeralBlock(body.response_url, blocks);
+					});
+
+				break;
+		}
+	});
+
 
 	app.action('close_message', removeMessageBlock);
 	app.action('close_ephemeral', removeEphemeralBlock);

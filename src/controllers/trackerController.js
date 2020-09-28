@@ -199,7 +199,7 @@ const createSprintCard =  async ({ ack, body, view, context, client }) => {
 	}
 };
 
-const makeSprintBlock = async (client, botToken, channelID, userID, sprintName) => {
+const makeSprintBlock = async (botToken, channelID, userID, sprintName) => {
 	try {
 		const data = await cacheIfFieldDoesNotExist(sprintName, 'sprintByTitle');
 
@@ -331,7 +331,7 @@ const openSprintCard = async (ack, client, botToken, responseURL, channelID, use
 	try {
 		await ack();
 
-		const blocksPayload = await makeSprintBlock(client, botToken, channelID, userID, sprintName);
+		const blocksPayload = await makeSprintBlock(botToken, channelID, userID, sprintName);
 
 		await client.chat.postEphemeral(blocksPayload);
 	} catch (err) {
@@ -509,108 +509,112 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 };
 
 const createTicketCard = async ({ ack, body, view, context, client }) => {
-    const ticketParams = {
-    	sprint_id, channel_id, responseURL, initialUser, selectedUser
-    } = JSON.parse(view.private_metadata);
-
-	const data = await cacheIfFieldDoesNotExist(sprint_id, 'sprintByID');
-
-	const content = { title, description, creator_sid, sprint_name } = {
-		title: view['state']['values']['ticket_name_block']['title_input']['value'],
-		description: view['state']['values']['ticket_desc_block']['description_input']['value'],
-		creator_name: body['user']['name'],
-		creator_sid: body['user']['id'],
-		status: false,
-		sprint_name: data.title,
-		sprint_id,
-		channel_id,
-		responseURL,
-		initialUser,
-		selectedUser
-	};
-
-	const ticketContentPayload = (decision) => {
-		content.decision = decision;
-
-		return content;
-	};
-	
-	client.chat.postMessage({
-		token: context.botToken,
-		channel: selectedUser || initialUser,
-		"blocks": [
-			{
-				"type": "header",
-				"text": {
-					"type": "plain_text",
-					"text": "New Ticket Request"
-				}
-			},
-			{
-				"type": "context",
-				"elements": [
-					{
-						"text": `*${title.toUpperCase()}*`,
-						"type": "mrkdwn"
-					}
-				]
-			},
-			{
-				"type": "context",
-				"elements": [
-					{
-						"text": `${description}`,
-						"type": "mrkdwn"
-					}
-				]
-			},
-			{
-				"type": "section",
-				"text": {
-					"type": "mrkdwn",
-					"text": "```Sprint Name: "+data.title.toUpperCase()+"\nSprint Admin: <@"+creator_sid+">```"
-				}
-			},
-			{
-				"type": "actions",
-				"elements": [
-					{
-						"type": "button",
-						"text": {
-							"type": "plain_text",
-							"emoji": true,
-							"text": "Approve"
-						},
-						"style": "primary",
-						"value": JSON.stringify(ticketContentPayload(true)),
-						action_id: 'ticket_accepted'
-					},
-					{
-						"type": "button",
-						"text": {
-							"type": "plain_text",
-							"emoji": true,
-							"text": "Deny"
-						},
-						"style": "danger",
-						"value": JSON.stringify(ticketContentPayload(false)),
-						action_id: 'ticket_declined'
-					}
-				]
-			}
-		]
-	});
-
-	ack();
-};
-
-const openTicketCard = async (ack, client, responseURL, ticketID, userID) => {
 	try {
 		await ack();
 
+	    const ticketParams = {
+	    	sprint_id, channel_id, responseURL, initialUser, selectedUser
+	    } = JSON.parse(view.private_metadata);
+
+		const data = await cacheIfFieldDoesNotExist(sprint_id, 'sprintByID');
+
+		const content = { title, description, creator_sid, sprint_name } = {
+			title: view['state']['values']['ticket_name_block']['title_input']['value'],
+			description: view['state']['values']['ticket_desc_block']['description_input']['value'],
+			creator_name: body['user']['name'],
+			creator_sid: body['user']['id'],
+			status: false,
+			sprint_name: data.title,
+			sprint_id,
+			channel_id,
+			responseURL,
+			initialUser,
+			selectedUser
+		};
+
+		const ticketContentPayload = (decision) => {
+			content.decision = decision;
+
+			return content;
+		};
+		
+		client.chat.postMessage({
+			token: context.botToken,
+			channel: selectedUser || initialUser,
+			"blocks": [
+				{
+					"type": "header",
+					"text": {
+						"type": "plain_text",
+						"text": "New Ticket Request"
+					}
+				},
+				{
+					"type": "context",
+					"elements": [
+						{
+							"text": `*${title.toUpperCase()}*`,
+							"type": "mrkdwn"
+						}
+					]
+				},
+				{
+					"type": "context",
+					"elements": [
+						{
+							"text": `${description}`,
+							"type": "mrkdwn"
+						}
+					]
+				},
+				{
+					"type": "section",
+					"text": {
+						"type": "mrkdwn",
+						"text": "```Sprint Name: "+data.title.toUpperCase()+"\nSprint Admin: <@"+creator_sid+">```"
+					}
+				},
+				{
+					"type": "actions",
+					"elements": [
+						{
+							"type": "button",
+							"text": {
+								"type": "plain_text",
+								"emoji": true,
+								"text": "Approve"
+							},
+							"style": "primary",
+							"value": JSON.stringify(ticketContentPayload(true)),
+							action_id: 'ticket_accepted'
+						},
+						{
+							"type": "button",
+							"text": {
+								"type": "plain_text",
+								"emoji": true,
+								"text": "Deny"
+							},
+							"style": "danger",
+							"value": JSON.stringify(ticketContentPayload(false)),
+							action_id: 'ticket_declined'
+						}
+					]
+				}
+			]
+		});
+	} catch (err) {
+		console.log(err);
+	}
+};
+
+const makeTicketBlock = async (ticketID, userID) => {
+	try {
 		const data = await cacheIfFieldDoesNotExist(ticketID, 'ticketByID');
 
-		const ticketPayload = { id, title, description, creator_sid, createdAt, updatedAt, worker_sid, worker_role, status } = {
+		const ticketPayload = { 
+			id, title, description, creator_sid, createdAt, updatedAt, worker_sid, worker_role, status 
+		} = {
 			id: data.tickets[0].id,
 			title: data.tickets[0].title.toUpperCase(),
 			description: data.tickets[0].description,
@@ -619,7 +623,13 @@ const openTicketCard = async (ack, client, responseURL, ticketID, userID) => {
 			updatedAt: data.tickets[0].updatedAt,
 			worker_sid: data.tickets[0].worker.sid,
 			worker_role: data.tickets[0].worker.role,
-			status: (data.tickets[0].status) ? "Done" : "In progress"
+			status: data.tickets[0].status
+		};
+
+		const redirectPayload = {
+			blockSrc: 'sprint',
+			blockID: data.title,
+			ticketID
 		};
 
 		const blocks = {
@@ -660,7 +670,7 @@ const openTicketCard = async (ack, client, responseURL, ticketID, userID) => {
 						},
 						{
 							"type": "mrkdwn",
-							"text": `*Status:*\n${status}`
+							"text": `*Status:*\n${(status) ? "Done" : "In progress"}`
 						},
 						{
 							"type": "mrkdwn",
@@ -681,8 +691,8 @@ const openTicketCard = async (ack, client, responseURL, ticketID, userID) => {
 								"text": "Back to sprint",
 								"emoji": true
 							},
-							value: `sprint_${data.title}`,
-							"action_id": "redirect"
+							value: JSON.stringify(redirectPayload),
+							"action_id": "redirect_from_back"
 						},
 						{
 							"type": "button",
@@ -699,9 +709,50 @@ const openTicketCard = async (ack, client, responseURL, ticketID, userID) => {
 			]
 		};
 
+		if (userID === worker_sid) {
+			redirectPayload.selectedStatus = !status;
+			redirectPayload.blockSrc = (redirectPayload.selectedStatus) ? 'sprint' : 'ticket';
+
+			blocks.blocks[blocks.blocks.length-1].elements.push({
+				"type": "button",
+				"text": {
+					"type": "plain_text",
+					"text": "Change Status",
+					"emoji": true
+				},
+				value: JSON.stringify(redirectPayload),
+				"style": "primary",
+				"action_id": "redirect_from_status"
+			});
+		}
+
+		return blocks;
+	} catch (err) {
+		console.log(err);
+	}
+};
+
+const openTicketCard = async (ack, client, responseURL, ticketID, userID) => {
+	try {
+		await ack();
+
+		const blocks = await makeTicketBlock(ticketID, userID);
+
 		replaceEphemeralBlock(responseURL, blocks);
 	} catch (err) {
 		console.log(err);
+	}
+};
+
+const changeTicketStatus = async (selectedStatus, ticketID) => {
+	try {
+		const ticket = await Tickets.findOne({ where: { id: ticketID } });
+
+		ticket.status = selectedStatus;
+
+		await ticket.save();
+	} catch (err) {
+		console.log(err)
 	}
 };
 
@@ -858,7 +909,9 @@ module.exports = {
 	openCreateTicketModel,
 	createTicketConfirmation,
 	createTicketCard,
+	makeTicketBlock,
 	openTicketCard,
+	changeTicketStatus,
 	updateTicketModelOnSelectChange,
 
 	replaceEphemeralBlock,
