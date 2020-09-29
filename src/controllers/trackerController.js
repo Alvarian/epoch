@@ -425,6 +425,7 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 		creator_name,
 		creator_sid,
 		status,
+		deadline,
 		si,
 		ci,
 		ru,
@@ -467,6 +468,7 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 				creator_name,
 				creator_sid,
 				status,
+				deadline,
 				sprint_id: si,
 				worker_id: await findOrRegisterWorker()
 			});
@@ -479,13 +481,13 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 
 				replaceEphemeralBlock(body.response_url, {
 					replace_original: true,
-					text: `:heavy_check_mark: You accepted request for ticket *"${title.toUpperCase()}"* at ${new Date()}`				
+					text: `:heavy_check_mark: You accepted request for ticket *"${title.toUpperCase()}"*, DUE: ${deadline}`				
 				});
 
 				client.chat.postMessage({
 					token: client.token,
 					channel: creator_sid,
-					text: `:heavy_check_mark: <@${su || iu}> accepted request for ticket *"${title.toUpperCase()}"* at ${new Date()}`
+					text: `:heavy_check_mark: <@${su || iu}> accepted request for ticket *"${title.toUpperCase()}"*, DUE:${deadline}`
 				});
 			} else {
 				msg = 'There was an error with your submission';
@@ -495,13 +497,13 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 		} else {
 			replaceEphemeralBlock(body.response_url, {
 				replace_original: true,
-				text: `:x: You rejected request for ticket *"${title.toUpperCase()}"* at ${new Date()}`
+				text: `:x: You rejected request for ticket *"${title.toUpperCase()}"*, DUE: ${deadline}`
 			});
 
 			client.chat.postMessage({
 				token: client.token,
 				channel: creator_sid,
-				text: `:x: <@${su || iu}> rejected request for ticket *"${title.toUpperCase()}"* at ${new Date()}`				
+				text: `:x: <@${su || iu}> rejected request for ticket *"${title.toUpperCase()}"*, DUE: ${deadline}`				
 			});
 		}
 	}
@@ -525,6 +527,7 @@ const createTicketCard = async (ack, body, view, context, client, selectedDate) 
 			description: view.description,
 			creator_sid: body.user.id,
 			status: false,
+			deadline: selectedDate,
 			sprint_name: data.title,
 			si,
 			ci,
@@ -763,6 +766,67 @@ const makeTicketBlock = async (ticketID, userID) => {
 			});
 		}
 
+		if (userID === creator_sid) {
+			blocks.blocks[blocks.blocks.length-1].elements.push({
+				"type": "button",
+				"text": {
+					"type": "plain_text",
+					"text": "DELETE",
+					"emoji": true
+				},
+				value: JSON.stringify(redirectPayload),
+				"style": "danger",
+				confirm: {
+					"title": {
+						"type": "plain_text",
+						"text": "Confirm delete"
+					},
+					text: {
+						type: "plain_text",
+						text: `Are you sure you want to delete ticket ${title.toUpperCase()}?`
+					},
+					"confirm": {
+						"type": "plain_text",
+						"text": "Delete"
+					},
+					style: "danger",
+					"deny": {
+						"type": "plain_text",
+						"text": "Cancel"
+					}
+				},
+				"action_id": "redirect_from_delete"
+			},
+			{
+				"type": "button",
+				"text": {
+					"type": "plain_text",
+					"text": "EDIT",
+					"emoji": true
+				},
+				value: JSON.stringify(redirectPayload),
+				confirm: {
+					"title": {
+						"type": "plain_text",
+						"text": "Are you sure?"
+					},
+					"text": {
+						"type": "mrkdwn",
+						"text": "Wouldn't you prefer a good game of _chess_?"
+					},
+					"confirm": {
+						"type": "plain_text",
+						"text": "Do it"
+					},
+					"deny": {
+						"type": "plain_text",
+						"text": "Stop, I've changed my mind!"
+					}
+				},
+				"action_id": "redirect_from_edit"
+			});
+		}
+
 		return blocks;
 	} catch (err) {
 		console.log(err);
@@ -874,6 +938,11 @@ const updateTicketModelOnSelectChange = async ({ ack, client, body: {view: {id, 
 	} catch (err) {console.log(err)}
 };
 
+const deleteTicket = async (id) => {
+	const ticket = await Tickets.findOne({ where: { id } });
+	await ticket.destroy();
+};
+
 
 
 const replaceEphemeralBlock = async (responseURL, blocks) => {
@@ -951,6 +1020,7 @@ module.exports = {
 	openTicketCard,
 	changeTicketStatus,
 	updateTicketModelOnSelectChange,
+	deleteTicket,
 
 	replaceEphemeralBlock,
 	removeEphemeralBlock,

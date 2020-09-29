@@ -105,6 +105,10 @@ const Tickets = database.define('tickets',
 			type: Sequelize.BOOLEAN,
 			allowNull: false
 		},
+		deadline: {
+			type: Sequelize.STRING,
+			allowNull: true
+		},
 		worker_id: {
 			type: Sequelize.STRING,
 			allowNull: false

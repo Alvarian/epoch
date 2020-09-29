@@ -13,6 +13,7 @@ const {
 	openTicketCard,
 	changeTicketStatus,
 	updateTicketModelOnSelectChange,
+	deleteTicket,
 
 	removeEphemeralBlock,
 	replaceEphemeralBlock,
@@ -133,6 +134,26 @@ const trackerActionRoutes = app => {
 					.then(async () => {
 						blocks = await makeTicketBlock(ticketID, body.user.id);
 
+						replaceEphemeralBlock(body.response_url, blocks);
+					});
+
+				break;
+		}
+	});
+
+	app.action('redirect_from_delete', async ({context, body, payload}) => {
+		const redirectPayload = {
+			blockSrc, 
+			blockID,
+			ticketID 
+		} = JSON.parse(payload.value);
+
+		switch (blockSrc) {
+			case 'sprint':
+				deleteTicket(ticketID)
+					.then(async () => {
+						const blocks = await makeSprintBlock(context.botToken, body.container.channel_id, body.user.id, blockID);
+						
 						replaceEphemeralBlock(body.response_url, blocks);
 					});
 
