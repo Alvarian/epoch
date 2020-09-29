@@ -3,6 +3,7 @@ const { Sprint, Assigned, Workers, Tickets } = require('../models/Tracker');
 const fetch = require('node-fetch');
 
 
+
 function cacheIfFieldDoesNotExist(paramFromRequest, paramType, queryObj=null) {
 	switch (paramType) {
 		case 'ticketByID':
@@ -344,7 +345,7 @@ const openSprintCard = async (ack, client, botToken, responseURL, channelID, use
 const openCreateTicketModel = async (ack, client, sprintPayload, triggerID) => {
 	try {
 		await ack();
-
+		
 		const result = await client.views.open({
 			// Pass a valid trigger_id within 3 seconds of receiving it
 			trigger_id: triggerID,
@@ -395,7 +396,7 @@ const openCreateTicketModel = async (ack, client, sprintPayload, triggerID) => {
 						"accessory": {
 							action_id: 'select_input',
 							"type": "users_select",
-							initial_user: sprintPayload.selectedUser || sprintPayload.initialUser,
+							initial_user: sprintPayload.su || sprintPayload.iu,
 							"placeholder": {
 								"type": "plain_text",
 								"text": "Select a user",
@@ -418,17 +419,18 @@ const openCreateTicketModel = async (ack, client, sprintPayload, triggerID) => {
 };
 
 const createTicketConfirmation = async ({ ack, client, payload, body }) => {
-	const { 
+	const guuh = { 
 		title, 
 		description,
 		creator_name,
 		creator_sid,
 		status,
-		sprint_id,
-		channel_id,
-		responseURL,
-		initialUser,
-		selectedUser,
+		si,
+		ci,
+		ru,
+		iu,
+		su,
+		selectedDate,
 		decision
 	} = JSON.parse(payload.value);
 
@@ -439,7 +441,7 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 			const findOrRegisterWorker = async () => {
 				const worker = await client.users.info({
 					token: client.token,
-					user: selectedUser || initialUser
+					user: su || iu
 				});
 
 				const isWorker = await Workers.findOne({
@@ -465,7 +467,7 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 				creator_name,
 				creator_sid,
 				status,
-				sprint_id,
+				sprint_id: si,
 				worker_id: await findOrRegisterWorker()
 			});
 
@@ -483,7 +485,7 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 				client.chat.postMessage({
 					token: client.token,
 					channel: creator_sid,
-					text: `:heavy_check_mark: <@${selectedUser || initialUser}> accepted request for ticket *"${title.toUpperCase()}"* at ${new Date()}`
+					text: `:heavy_check_mark: <@${su || iu}> accepted request for ticket *"${title.toUpperCase()}"* at ${new Date()}`
 				});
 			} else {
 				msg = 'There was an error with your submission';
@@ -495,11 +497,11 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 				replace_original: true,
 				text: `:x: You rejected request for ticket *"${title.toUpperCase()}"* at ${new Date()}`
 			});
-			
+
 			client.chat.postMessage({
 				token: client.token,
 				channel: creator_sid,
-				text: `:x: <@${selectedUser || initialUser}> rejected request for ticket *"${title.toUpperCase()}"* at ${new Date()}`				
+				text: `:x: <@${su || iu}> rejected request for ticket *"${title.toUpperCase()}"* at ${new Date()}`				
 			});
 		}
 	}
@@ -508,28 +510,28 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 	}
 };
 
-const createTicketCard = async ({ ack, body, view, context, client }) => {
+const createTicketCard = async (ack, body, view, context, client, selectedDate) => {
 	try {
 		await ack();
 
 	    const ticketParams = {
-	    	sprint_id, channel_id, responseURL, initialUser, selectedUser
-	    } = JSON.parse(view.private_metadata);
+	    	si, ci, ru, iu, su, cs
+	    } = view.pm;
 
-		const data = await cacheIfFieldDoesNotExist(sprint_id, 'sprintByID');
+		const data = await cacheIfFieldDoesNotExist(si, 'sprintByID');
 
-		const content = { title, description, creator_sid, sprint_name } = {
-			title: view['state']['values']['ticket_name_block']['title_input']['value'],
-			description: view['state']['values']['ticket_desc_block']['description_input']['value'],
-			creator_name: body['user']['name'],
-			creator_sid: body['user']['id'],
+		const content = { title, description, creator_sid, sprint_name, si, ci, ru, iu, su } = {
+			title: view.title,
+			description: view.description,
+			creator_sid: body.user.id,
 			status: false,
 			sprint_name: data.title,
-			sprint_id,
-			channel_id,
-			responseURL,
-			initialUser,
-			selectedUser
+			si,
+			ci,
+			ru,
+			iu,
+			su,
+			selectedDate
 		};
 
 		const ticketContentPayload = (decision) => {
@@ -538,9 +540,16 @@ const createTicketCard = async ({ ack, body, view, context, client }) => {
 			return content;
 		};
 		
-		client.chat.postMessage({
+		const today = new Date();
+		const {yyyy, mm, dd} = {	
+			dd: String(today.getDate()).padStart(2, '0'),
+			mm: String(today.getMonth() + 1).padStart(2, '0'), //January is 0!
+			yyyy: today.getFullYear()
+		};
+
+		const blocksPayload = {
 			token: context.botToken,
-			channel: selectedUser || initialUser,
+			channel: su || iu,
 			"blocks": [
 				{
 					"type": "header",
@@ -575,6 +584,28 @@ const createTicketCard = async ({ ack, body, view, context, client }) => {
 					}
 				},
 				{
+					type: "section",
+					block_id: JSON.stringify({
+						title,
+						description,
+						pm: {si, ci, ru, iu, su, cs}
+					}),
+					"text": {
+						"type": "mrkdwn",
+						"text": "Pick a date for the deadline."
+					},
+					accessory: {
+						"type": "datepicker",
+						"initial_date": selectedDate || `${yyyy}-${mm}-${dd}`,
+						action_id: "redirect_date_change",
+						"placeholder": {
+							"type": "plain_text",
+							"text": "Select a date",
+							"emoji": true
+						}
+					}
+				},
+				{
 					"type": "actions",
 					"elements": [
 						{
@@ -602,7 +633,13 @@ const createTicketCard = async ({ ack, body, view, context, client }) => {
 					]
 				}
 			]
-		});
+		}
+
+		if (!selectedDate) {	
+			client.chat.postMessage(blocksPayload);
+		} else {
+			replaceEphemeralBlock(body.response_url, blocksPayload);
+		}
 	} catch (err) {
 		console.log(err);
 	}
@@ -756,14 +793,15 @@ const changeTicketStatus = async (selectedStatus, ticketID) => {
 	}
 };
 
-const updateTicketModelOnSelectChange = async ({ ack, client, body: {view:{id, type, title, blocks, submit, private_metadata, callback_id}}, payload, context }) => {
-	const { sprint_id, channel_id, responseURL } = JSON.parse(private_metadata);
+const updateTicketModelOnSelectChange = async ({ ack, client, body: {view: {id, private_metadata}}, payload, context }) => {
+	const { si, ci, ru, cs } = JSON.parse(private_metadata);
 	const sprintPayload = {
-		sprint_id, 
-		channel_id, 
-		responseURL,
-		initialUser: payload.initial_user,
-		selectedUser: payload.selected_user
+		si, 
+		ci, 
+		ru,
+		iu: payload.initial_user,
+		su: payload.selected_user,
+		cs
 	};
 
 	try {
@@ -817,7 +855,7 @@ const updateTicketModelOnSelectChange = async ({ ack, client, body: {view:{id, t
 						"accessory": {
 							action_id: 'select_input',
 							"type": "users_select",
-							initial_user: sprintPayload.selectedUser || sprintPayload.initialUser,
+							initial_user: sprintPayload.su || sprintPayload.iu,
 							"placeholder": {
 								"type": "plain_text",
 								"text": "Select a user",
@@ -899,7 +937,7 @@ const removeEphemeralBlock = async (module) => {
 
 
 module.exports = { 
-	getProjAdminToSayHello, 
+	getProjAdminToSayHello,
 	
 	openCreateSprintModel,
 	createSprintCard,

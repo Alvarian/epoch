@@ -97,10 +97,6 @@ const Tickets = database.define('tickets',
 			type: Sequelize.TEXT,
 			allowNull: false
 		},
-		creator_name: {
-			type: Sequelize.STRING,
-			allowNull: false
-		},
 		creator_sid: {
 			type: Sequelize.STRING,
 			allowNull: false

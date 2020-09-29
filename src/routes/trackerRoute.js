@@ -53,8 +53,15 @@ const trackCommandRoutes = module => {
 
 const trackerActionRoutes = app => {
 	app.view('create_sprint_model', createSprintCard);
-	app.view('create_ticket_model', createTicketCard);
-
+	app.view('create_ticket_model', async ({ack, body, view, context, client}) => {
+		const viewPayload = { 
+			title: view['state']['values']['ticket_name_block']['title_input']['value'], 
+			description: view['state']['values']['ticket_desc_block']['description_input']['value'], 
+			pm: JSON.parse(view.private_metadata) 
+		};
+		
+		createTicketCard(ack, body, viewPayload, context, client, null);
+	});
 
 	app.action('ticket_declined', createTicketConfirmation);
 	app.action('ticket_accepted', createTicketConfirmation);
@@ -63,11 +70,12 @@ const trackerActionRoutes = app => {
 
 	app.action('open_ticket_model', async ({ ack, client, body, payload }) => {
 		const sprintPayload = {
-			sprint_id: payload.value, 
-			channel_id: body.channel.id, 
-			responseURL: body.response_url,
-			initialUser: body.user.id,
-			selectedUser: false
+			si: payload.value, 
+			ci: body.channel.id, 
+			ru: body.response_url,
+			iu: body.user.id,
+			su: false,
+			cs: body.user.id
 		};
 
 		openCreateTicketModel(ack, client, sprintPayload, body.trigger_id);
@@ -93,6 +101,12 @@ const trackerActionRoutes = app => {
 		}
 
 		replaceEphemeralBlock(body.response_url, blocks);
+	});
+
+	app.action('redirect_date_change', async ({ack, body, payload, context, client}) => {
+		const datePayload = { title, description, pm } = JSON.parse(payload.block_id);
+
+		createTicketCard(ack, {user: {id: pm.cs}, response_url: body.response_url }, datePayload, context, client, payload.selected_date);
 	});
 
 	app.action('redirect_from_status', async ({context, body, payload}) => {
