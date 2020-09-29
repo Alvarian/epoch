@@ -4,8 +4,12 @@ const fetch = require('node-fetch');
 
 
 
-function cacheIfFieldDoesNotExist(paramFromRequest, paramType, queryObj=null) {
+function cacheIfFieldDoesNotExist(paramFromRequest, paramType, queryObj={}) {
 	switch (paramType) {
+		case 'allSprints':
+
+			break;
+
 		case 'ticketByID':
 			queryObj = {
 				include: [
@@ -72,9 +76,9 @@ function cacheIfFieldDoesNotExist(paramFromRequest, paramType, queryObj=null) {
 					const dbData = await Sprint.findAll(queryObj);
 
 					// cache
-					cacheClient.setex(paramType.concat(paramFromRequest), 60, JSON.stringify(dbData[0]));
+					cacheClient.setex(paramType.concat(paramFromRequest), 60, JSON.stringify(dbData));
 					
-					resolve(dbData[0]);
+					resolve(dbData);
 				} catch (err) {
 					reject(err);
 				}
@@ -97,67 +101,166 @@ const getProjAdminToSayHello = async ({ say, ack }, param) => {
 
 
 
-const openCreateSprintModel =  async ({ ack, body, client, payload }, sprintName) => {
-  // Acknowledge the command request
+const makeSprintListBlock = async (botToken, channelID, userID) => {
+	try {
+		const sprints = await cacheIfFieldDoesNotExist('noParams', 'allSprints');
 
-  try {
-	await ack();
-    
-    // Call views.open with the built-in client
-    // FIELDS: title, description, admin_name, admin_email, admin_sid
-    const result = await client.views.open({
-		// Pass a valid trigger_id within 3 seconds of receiving it
-		trigger_id: body.trigger_id,
-		// View payload
-		view: {
-			type: 'modal',
-			// View identifier
-			private_metadata: payload.channel_id,
-			callback_id: 'create_sprint_model',
-			title: {
-				type: 'plain_text',
-				text: 'Start Sprint'
-			},
-			blocks: [
+		const blocksPayload = {
+			token: botToken,
+			channel: channelID,
+			user: userID,
+			"blocks": [
 				{
-					type: 'input',
-					block_id: 'project_name_block',
-					label: {
-						type: 'plain_text',
-						text: 'Project Name'
-					},
-					element: {
-						type: 'plain_text_input',
-						action_id: 'title_input',
-						multiline: false,
-						initial_value: sprintName
+					"type": "header",
+					"text": {
+						"type": "plain_text",
+						"text": ":pushpin: SPRINT LIST :pushpin:"
 					}
 				},
 				{
-					type: 'input',
-					block_id: 'project_desc_block',
-					label: {
-						type: 'plain_text',
-						text: 'Description'
-					},
-					element: {
-						type: 'plain_text_input',
-						action_id: 'description_input',
-						multiline: true
-					}
+					"type": "divider"
 				}
-			],
-			submit: {
-			    type: 'plain_text',
-			    text: 'Submit'
-			}
+			]
+		};
+
+		if (!sprints.length) {
+			blocksPayload.blocks.push({
+				"type": "context",
+				"elements": [
+					{
+						"text": "No sprints have been created",
+						"type": "mrkdwn"
+					}
+				]
+			})
+		} else {
+			sprints.forEach(sprint => {
+				const {id, title, admin_sid, createdAt, status} = sprint;
+
+				blocksPayload.blocks.push({
+					"type": "section",
+					"text": {
+						"type": "mrkdwn",
+						"text": `*${title}* ${createdAt} <@${admin_sid}> ${status}`
+					},
+					"accessory": {
+						"type": "button",
+						"text": {
+							"type": "plain_text",
+							"text": "Open Sprint",
+							"emoji": true
+						},
+						value: `${title}`,
+						"action_id": "open_sprint"
+					}
+				});
+			});
 		}
-    });
-    console.log(result.ok);
-  }
-  catch (error) {
-    console.error(error);
-  }
+
+		const lastBlock = {
+			"type": "actions",
+			"elements": [
+				{
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "Create Sprint",
+						"emoji": true
+					},
+					"style": "primary",
+					"action_id": "open_sprint_model"
+				},
+				{
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "Close",
+						"emoji": true
+					},
+					"style": "danger",
+					"action_id": "close_ephemeral"
+				}
+			]
+		};
+		blocksPayload.blocks.push(lastBlock);
+
+		return blocksPayload;
+	} catch (err) {
+		console.log(err);
+	}
+};
+
+const openSprintList = async (ack, client, botToken, response_url, channel_id, user_id) => {
+	try {
+		await ack();
+	
+		const blocksPayload = await makeSprintListBlock(botToken, channel_id, user_id);
+
+		await client.chat.postEphemeral(blocksPayload);
+	} catch (err) {
+		console.log(err);
+	}
+};
+
+
+
+const openCreateSprintModel =  async ({ ack, body, client, payload }, sprintName) => {
+	try {
+		await ack();
+
+		const result = await client.views.open({
+			// Pass a valid trigger_id within 3 seconds of receiving it
+			trigger_id: body.trigger_id,
+			// View payload
+			view: {
+				type: 'modal',
+				// View identifier
+				private_metadata: payload.channel_id,
+				callback_id: 'create_sprint_model',
+				title: {
+					type: 'plain_text',
+					text: 'Start Sprint'
+				},
+				blocks: [
+					{
+						type: 'input',
+						block_id: 'project_name_block',
+						label: {
+							type: 'plain_text',
+							text: 'Project Name'
+						},
+						element: {
+							type: 'plain_text_input',
+							action_id: 'title_input',
+							multiline: false,
+							initial_value: sprintName || ''
+						}
+					},
+					{
+						type: 'input',
+						block_id: 'project_desc_block',
+						label: {
+							type: 'plain_text',
+							text: 'Description'
+						},
+						element: {
+							type: 'plain_text_input',
+							action_id: 'description_input',
+							multiline: true
+						}
+					}
+				],
+				submit: {
+				    type: 'plain_text',
+				    text: 'Submit'
+				}
+			}
+		});
+
+		console.log(result.ok);
+	} catch (error) {
+		console.error(error);
+	}
 };
 
 const createSprintCard =  async ({ ack, body, view, context, client }) => {
@@ -205,20 +308,18 @@ const makeSprintBlock = async (botToken, channelID, userID, sprintName) => {
 		const data = await cacheIfFieldDoesNotExist(sprintName, 'sprintByTitle');
 
 		const sprintPayload = { id, title, description, admin, createdAt, updatedAt, tickets } = {
-			id: data.id,
-			title: data.title.toUpperCase(),
-			description: data.description,
-			admin: data.admin_name,
-			createdAt: data.createdAt,
-			updatedAt: data.updatedAt,
-			workers_assigned: data.workers_assigneds,  //array
-			tickets: data.tickets  // array
+			id: data[0].id,
+			title: data[0].title.toUpperCase(),
+			description: data[0].description,
+			admin: data[0].admin_name,
+			createdAt: data[0].createdAt,
+			updatedAt: data[0].updatedAt,
+			workers_assigned: data[0].workers_assigneds,  //array
+			tickets: data[0].tickets  // array
 		};
 
 		const blocksPayload = {
-			// The token you used to initialize your app is stored in the `context` object
 			token: botToken,
-			// Payload message should be posted in the channel where original message was heard
 			channel: channelID,
 			user: userID,
 			"blocks": [
@@ -294,9 +395,25 @@ const makeSprintBlock = async (botToken, channelID, userID, sprintName) => {
 			});
 		}
 		
+		const redirectPayload = {
+			blockSrc: 'sprintList',
+			blockID: null,
+			ticketID: null
+		};
+
 		const finalBlock = {
 			"type": "actions",
 			"elements": [
+				{
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "Sprint List",
+						"emoji": true
+					},
+					value: JSON.stringify(redirectPayload),
+					"action_id": "redirect_from_back"
+				},
 				{
 					"type": "button",
 					"text": {
@@ -528,7 +645,7 @@ const createTicketCard = async (ack, body, view, context, client, selectedDate) 
 			creator_sid: body.user.id,
 			status: false,
 			deadline: selectedDate,
-			sprint_name: data.title,
+			sprint_name: data[0].title,
 			si,
 			ci,
 			ru,
@@ -583,7 +700,7 @@ const createTicketCard = async (ack, body, view, context, client, selectedDate) 
 					"type": "section",
 					"text": {
 						"type": "mrkdwn",
-						"text": "```Sprint Name: "+data.title.toUpperCase()+"\nSprint Admin: <@"+creator_sid+">```"
+						"text": "```Sprint Name: "+data[0].title.toUpperCase()+"\nSprint Admin: <@"+creator_sid+">```"
 					}
 				},
 				{
@@ -655,20 +772,20 @@ const makeTicketBlock = async (ticketID, userID) => {
 		const ticketPayload = { 
 			id, title, description, creator_sid, createdAt, updatedAt, worker_sid, worker_role, status 
 		} = {
-			id: data.tickets[0].id,
-			title: data.tickets[0].title.toUpperCase(),
-			description: data.tickets[0].description,
-			creator_sid: data.tickets[0].creator_sid,
-			createdAt: data.tickets[0].createdAt,
-			updatedAt: data.tickets[0].updatedAt,
-			worker_sid: data.tickets[0].worker.sid,
-			worker_role: data.tickets[0].worker.role,
-			status: data.tickets[0].status
+			id: data[0].tickets[0].id,
+			title: data[0].tickets[0].title.toUpperCase(),
+			description: data[0].tickets[0].description,
+			creator_sid: data[0].tickets[0].creator_sid,
+			createdAt: data[0].tickets[0].createdAt,
+			updatedAt: data[0].tickets[0].updatedAt,
+			worker_sid: data[0].tickets[0].worker.sid,
+			worker_role: data[0].tickets[0].worker.role,
+			status: data[0].tickets[0].status
 		};
 
 		const redirectPayload = {
 			blockSrc: 'sprint',
-			blockID: data.title,
+			blockID: data[0].title,
 			ticketID
 		};
 
@@ -940,6 +1057,7 @@ const updateTicketModelOnSelectChange = async ({ ack, client, body: {view: {id, 
 
 const deleteTicket = async (id) => {
 	const ticket = await Tickets.findOne({ where: { id } });
+
 	await ticket.destroy();
 };
 
@@ -1008,9 +1126,11 @@ const removeEphemeralBlock = async (module) => {
 module.exports = { 
 	getProjAdminToSayHello,
 	
+	openSprintList,
 	openCreateSprintModel,
 	createSprintCard,
 	makeSprintBlock,
+	makeSprintListBlock,
 	openSprintCard,
 
 	openCreateTicketModel,

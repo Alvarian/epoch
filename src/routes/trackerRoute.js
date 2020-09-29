@@ -1,8 +1,10 @@
 const { 
 	getProjAdminToSayHello,
 	 
+	openSprintList,
 	openCreateSprintModel,
 	createSprintCard,
+	makeSprintListBlock,
 	makeSprintBlock,
 	openSprintCard,
 
@@ -22,12 +24,13 @@ const {
 
 
 const trackCommandRoutes = module => {
-	const { message, say, command } = module;
+	const { message, say, command, client, context, body, ack } = module;
 
 	// params to point to controller
 	const pointerDigest = command.text.split(' ');
-	const pointer = pointerDigest.slice(0, pointerDigest.length-1).join(' ');
+	const pointer = (pointerDigest.length > 2) ? pointerDigest.slice(0, pointerDigest.length-1).join(' ') : command.text;
 	const project = pointerDigest[pointerDigest.length-1];
+	
 	switch (pointer) {
 		case 'say hello from':
 			getProjAdminToSayHello(module, project);
@@ -38,11 +41,14 @@ const trackCommandRoutes = module => {
 			openCreateSprintModel(module, project);
 			
 			break;
-		// client, botToken, responseURL, channelID, userID, sprintName
-		case 'open sprint':
-			const { client, context, body, ack } = module;
 
+		case 'open sprint':
 			openSprintCard(ack, client, context.botToken, body.response_url, body.channel_id, body.user_id, project);
+			
+			break;
+
+		case 'open sprints':
+			openSprintList(ack, client, context.botToken, body.response_url, body.channel_id, body.user_id);
 			
 			break;
 
@@ -88,6 +94,16 @@ const trackerActionRoutes = app => {
 		openTicketCard(ack, client, body.response_url, payload.value, body.user.id);
 	});
 
+	app.action('open_sprint_model', async (module) => {
+		openCreateSprintModel(module, null);
+	});
+
+	app.action('open_sprint', async ({ack, client, context, body, payload}) => {
+		const blocks = await makeSprintBlock(context.botToken, body.channel.id, body.user.id, payload.value);
+						
+		replaceEphemeralBlock(body.response_url, blocks);
+	});
+
 	app.action('redirect_from_back', async ({context, body, payload}, blocks=null) => {
 		const redirectPayload = { 
 			blockSrc, 
@@ -99,6 +115,9 @@ const trackerActionRoutes = app => {
 			case 'sprint':
 				blocks = await makeSprintBlock(context.botToken, body.container.channel_id, body.user.id, blockID);
 				break;
+				
+			case 'sprintList':
+				blocks = await makeSprintListBlock(context.botToken, body.container.channel_id, body.user.id)
 		}
 
 		replaceEphemeralBlock(body.response_url, blocks);
@@ -160,7 +179,6 @@ const trackerActionRoutes = app => {
 				break;
 		}
 	});
-
 
 	app.action('close_message', removeMessageBlock);
 	app.action('close_ephemeral', removeEphemeralBlock);
