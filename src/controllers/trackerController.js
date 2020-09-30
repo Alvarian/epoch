@@ -204,18 +204,19 @@ const openSprintList = async (ack, client, botToken, response_url, channel_id, u
 
 
 
-const openCreateSprintModel =  async ({ ack, body, client, payload }, sprintName) => {
+const openCreateSprintModel =  async (ack, channelID, responseURL, triggerID, client, sprintName, isFromList) => {
 	try {
 		await ack();
 
 		const result = await client.views.open({
-			// Pass a valid trigger_id within 3 seconds of receiving it
-			trigger_id: body.trigger_id,
-			// View payload
+			trigger_id: triggerID,
 			view: {
 				type: 'modal',
-				// View identifier
-				private_metadata: payload.channel_id,
+				private_metadata: JSON.stringify({
+					channelID, 
+					responseURL,
+					isFromList
+				}),
 				callback_id: 'create_sprint_model',
 				title: {
 					type: 'plain_text',
@@ -264,21 +265,17 @@ const openCreateSprintModel =  async ({ ack, body, client, payload }, sprintName
 };
 
 const createSprintCard =  async ({ ack, body, view, context, client }) => {
-    // FIELDS: title, description, admin_name, admin_email, admin_sid
-
-	const { title, description, admin_name, admin_sid } = {
+    const { title, description, admin_name, admin_sid } = {
 		title: view['state']['values']['project_name_block']['title_input']['value'],
 		description: view['state']['values']['project_desc_block']['description_input']['value'],
 		admin_name: body['user']['name'],
 		admin_sid: body['user']['id']	
 	};
+	const { channelID, responseURL, isFromList } = JSON.parse(view.private_metadata);
 
-	// Message the user
 	try {
-		// Message to send user
 		let msg = '';
 		
-		// Save to DB
 		const results = await Sprint.create({
 			title,
 			description,
@@ -288,10 +285,9 @@ const createSprintCard =  async ({ ack, body, view, context, client }) => {
 		});
 
 		if (results) {
-			// DB save was successful
 			msg = 'Your submission was successful';
 
-			openSprintCard(ack, client, context.botToken, body.response_url, view.private_metadata, body.user.id, title);
+			openSprintCard(ack, client, context.botToken, channelID, body.user.id, title, responseURL, isFromList);
 		} else {
 			msg = 'There was an error with your submission';
 		}
@@ -306,12 +302,11 @@ const createSprintCard =  async ({ ack, body, view, context, client }) => {
 const makeSprintBlock = async (botToken, channelID, userID, sprintName) => {
 	try {
 		const data = await cacheIfFieldDoesNotExist(sprintName, 'sprintByTitle');
-
 		const sprintPayload = { id, title, description, admin, createdAt, updatedAt, tickets } = {
 			id: data[0].id,
 			title: data[0].title.toUpperCase(),
 			description: data[0].description,
-			admin: data[0].admin_name,
+			admin: data[0].admin_sid,
 			createdAt: data[0].createdAt,
 			updatedAt: data[0].updatedAt,
 			workers_assigned: data[0].workers_assigneds,  //array
@@ -343,7 +338,7 @@ const makeSprintBlock = async (botToken, channelID, userID, sprintName) => {
 					"type": "context",
 					"elements": [
 						{
-							"text": `Create on ${createdAt}`,
+							"text": `Create on ${createdAt} by <@${admin}>`,
 							"type": "mrkdwn"
 						}
 					]
@@ -437,6 +432,39 @@ const makeSprintBlock = async (botToken, channelID, userID, sprintName) => {
 				}
 			]
 		};
+		if (admin == userID) {
+			redirectPayload.blockID = id;
+			finalBlock.elements.push({
+				"type": "button",
+				"text": {
+					"type": "plain_text",
+					"text": "DELETE",
+					"emoji": true
+				},
+				"style": "danger",
+				confirm: {
+					"title": {
+						"type": "plain_text",
+						"text": "Confirm delete"
+					},
+					text: {
+						type: "plain_text",
+						text: `Are you sure you want to delete sprint ${title.toUpperCase()}?`
+					},
+					"confirm": {
+						"type": "plain_text",
+						"text": "Delete"
+					},
+					style: "danger",
+					"deny": {
+						"type": "plain_text",
+						"text": "Cancel"
+					}
+				},
+				value: JSON.stringify(redirectPayload),
+				"action_id": "redirect_from_delete"
+			});
+		}
 		blocksPayload.blocks.push(finalBlock);
 
 		return blocksPayload;
@@ -445,16 +473,26 @@ const makeSprintBlock = async (botToken, channelID, userID, sprintName) => {
 	}
 };
 
-const openSprintCard = async (ack, client, botToken, responseURL, channelID, userID, sprintName) => {
+const openSprintCard = async (ack, client, botToken, channelID, userID, sprintName, responseURL, requestFromList) => {
 	try {
 		await ack();
 
 		const blocksPayload = await makeSprintBlock(botToken, channelID, userID, sprintName);
 
-		await client.chat.postEphemeral(blocksPayload);
+		if (!requestFromList) {
+			await client.chat.postEphemeral(blocksPayload);
+		} else {
+			await replaceEphemeralBlock(responseURL, blocksPayload);
+		}
 	} catch (err) {
 		console.log(err);
 	}
+};
+
+const deleteSprint = async (id) => {
+	const sprint = await Sprint.findOne({ where: { id } });
+
+	await sprint.destroy();
 };
 
 
@@ -598,13 +636,13 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 
 				replaceEphemeralBlock(body.response_url, {
 					replace_original: true,
-					text: `:heavy_check_mark: You accepted request for ticket *"${title.toUpperCase()}"*, DUE: ${deadline}`				
+					text: `:heavy_check_mark: You accepted request for ticket *"${title.toUpperCase()}"*, due on ${deadline}`				
 				});
 
 				client.chat.postMessage({
 					token: client.token,
 					channel: creator_sid,
-					text: `:heavy_check_mark: <@${su || iu}> accepted request for ticket *"${title.toUpperCase()}"*, DUE:${deadline}`
+					text: `:heavy_check_mark: <@${su || iu}> accepted request for ticket *"${title.toUpperCase()}"*, due on ${deadline}`
 				});
 			} else {
 				msg = 'There was an error with your submission';
@@ -614,13 +652,13 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 		} else {
 			replaceEphemeralBlock(body.response_url, {
 				replace_original: true,
-				text: `:x: You rejected request for ticket *"${title.toUpperCase()}"*, DUE: ${deadline}`
+				text: `:x: You rejected request for ticket *"${title.toUpperCase()}"*, due on ${deadline}`
 			});
 
 			client.chat.postMessage({
 				token: client.token,
 				channel: creator_sid,
-				text: `:x: <@${su || iu}> rejected request for ticket *"${title.toUpperCase()}"*, DUE: ${deadline}`				
+				text: `:x: <@${su || iu}> rejected request for ticket *"${title.toUpperCase()}"*, due on ${deadline}`				
 			});
 		}
 	}
@@ -639,12 +677,19 @@ const createTicketCard = async (ack, body, view, context, client, selectedDate) 
 
 		const data = await cacheIfFieldDoesNotExist(si, 'sprintByID');
 
-		const content = { title, description, creator_sid, sprint_name, si, ci, ru, iu, su } = {
+		const today = new Date();
+		const {yyyy, mm, dd} = {	
+			dd: String(today.getDate()).padStart(2, '0'),
+			mm: String(today.getMonth() + 1).padStart(2, '0'), //January is 0!
+			yyyy: today.getFullYear()
+		};
+
+		const content = { title, description, creator_sid, sprint_name, deadline, si, ci, ru, iu, su } = {
 			title: view.title,
 			description: view.description,
 			creator_sid: body.user.id,
 			status: false,
-			deadline: selectedDate,
+			deadline: selectedDate || `${yyyy}-${mm}-${dd}`,
 			sprint_name: data[0].title,
 			si,
 			ci,
@@ -660,12 +705,6 @@ const createTicketCard = async (ack, body, view, context, client, selectedDate) 
 			return content;
 		};
 		
-		const today = new Date();
-		const {yyyy, mm, dd} = {	
-			dd: String(today.getDate()).padStart(2, '0'),
-			mm: String(today.getMonth() + 1).padStart(2, '0'), //January is 0!
-			yyyy: today.getFullYear()
-		};
 
 		const blocksPayload = {
 			token: context.botToken,
@@ -716,7 +755,7 @@ const createTicketCard = async (ack, body, view, context, client, selectedDate) 
 					},
 					accessory: {
 						"type": "datepicker",
-						"initial_date": selectedDate || `${yyyy}-${mm}-${dd}`,
+						"initial_date": deadline,
 						action_id: "redirect_date_change",
 						"placeholder": {
 							"type": "plain_text",
@@ -913,34 +952,6 @@ const makeTicketBlock = async (ticketID, userID) => {
 					}
 				},
 				"action_id": "redirect_from_delete"
-			},
-			{
-				"type": "button",
-				"text": {
-					"type": "plain_text",
-					"text": "EDIT",
-					"emoji": true
-				},
-				value: JSON.stringify(redirectPayload),
-				confirm: {
-					"title": {
-						"type": "plain_text",
-						"text": "Are you sure?"
-					},
-					"text": {
-						"type": "mrkdwn",
-						"text": "Wouldn't you prefer a good game of _chess_?"
-					},
-					"confirm": {
-						"type": "plain_text",
-						"text": "Do it"
-					},
-					"deny": {
-						"type": "plain_text",
-						"text": "Stop, I've changed my mind!"
-					}
-				},
-				"action_id": "redirect_from_edit"
 			});
 		}
 
@@ -1132,6 +1143,7 @@ module.exports = {
 	makeSprintBlock,
 	makeSprintListBlock,
 	openSprintCard,
+	deleteSprint,
 
 	openCreateTicketModel,
 	createTicketConfirmation,

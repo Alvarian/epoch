@@ -7,6 +7,7 @@ const {
 	makeSprintListBlock,
 	makeSprintBlock,
 	openSprintCard,
+	deleteSprint,
 
 	openCreateTicketModel,
 	createTicketConfirmation,
@@ -38,13 +39,13 @@ const trackCommandRoutes = module => {
 			break;
 
 		case 'create sprint':
-			openCreateSprintModel(module, project);
+			openCreateSprintModel(ack, body.channel_id, body.response_url, body.trigger_id, client, project);
 			
 			break;
 
 		case 'open sprint':
-			openSprintCard(ack, client, context.botToken, body.response_url, body.channel_id, body.user_id, project);
-			
+			openSprintCard(ack, client, context.botToken, body.channel_id, body.user_id, project, body.response_url);
+			//ack, client, botToken, channelID, userID, sprintName, responseURL
 			break;
 
 		case 'open sprints':
@@ -94,8 +95,8 @@ const trackerActionRoutes = app => {
 		openTicketCard(ack, client, body.response_url, payload.value, body.user.id);
 	});
 
-	app.action('open_sprint_model', async (module) => {
-		openCreateSprintModel(module, null);
+	app.action('open_sprint_model', async ({ ack, body, client }) => {
+		openCreateSprintModel(ack, body.channel.id, body.response_url, body.trigger_id, client, null, true);
 	});
 
 	app.action('open_sprint', async ({ack, client, context, body, payload}) => {
@@ -175,6 +176,16 @@ const trackerActionRoutes = app => {
 						
 						replaceEphemeralBlock(body.response_url, blocks);
 					});
+
+				break;
+
+			case 'sprintList':
+				deleteSprint(blockID)
+					.then(async () => {
+						const blocks = await makeSprintListBlock(context.botToken, body.container.channel_id, body.user.id);
+
+						replaceEphemeralBlock(body.response_url, blocks);
+					})
 
 				break;
 		}
