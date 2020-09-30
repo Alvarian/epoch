@@ -396,7 +396,7 @@ const makeSprintBlock = async (botToken, channelID, userID, sprintName) => {
 					"type": "section",
 					"text": {
 						"type": "mrkdwn",
-						"text": `*${title}* ${createdAt} <@${creator_sid}> ${status}`
+						"text": `${(status) ? ':star2:' : ':clock7:'} *${title}* <@${creator_sid}> ${createdAt}`
 					},
 					"accessory": {
 						"type": "button",
