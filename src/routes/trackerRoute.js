@@ -125,9 +125,9 @@ const trackerActionRoutes = app => {
 	});
 
 	app.action('redirect_date_change', async ({ack, body, payload, context, client}) => {
-		const datePayload = { title, description, pm } = JSON.parse(payload.block_id);
+		const { userID, key } = JSON.parse(payload.block_id);
 
-		createTicketCard(ack, {user: {id: pm.cs}, response_url: body.response_url }, datePayload, context, client, payload.selected_date);
+		createTicketCard(ack, { user: {id: userID}, key, response_url: body.response_url }, null, context, client, payload.selected_date);
 	});
 
 	app.action('redirect_from_status', async ({context, body, payload}) => {

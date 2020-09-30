@@ -1,7 +1,8 @@
 const cacheClient = require('../config/cache');
 const { Sprint, Assigned, Workers, Tickets } = require('../models/Tracker');
 const fetch = require('node-fetch');
-
+const { v4: uuidv4 } = require('uuid');
+console.log(uuidv4()); // ⇨ '1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed'
 
 
 function cacheIfFieldDoesNotExist(paramFromRequest, paramType, queryObj={}) {
@@ -79,6 +80,27 @@ function cacheIfFieldDoesNotExist(paramFromRequest, paramType, queryObj={}) {
 					cacheClient.setex(paramType.concat(paramFromRequest), 60, JSON.stringify(dbData));
 					
 					resolve(dbData);
+				} catch (err) {
+					reject(err);
+				}
+			}
+		});
+	});
+}
+
+function cachePayloadBetweenActions(key, payload) {
+	return new Promise((resolve, reject) => {
+		cacheClient.get(key, async (err, cachedData) => {
+			if (err) throw err;
+
+			if (cachedData !== null) {	
+				resolve(JSON.parse(cachedData));
+			} else {
+				try {
+					// cache
+					cacheClient.setex(key, 60, JSON.stringify(payload));
+					
+					resolve(payload);
 				} catch (err) {
 					reject(err);
 				}
@@ -574,7 +596,7 @@ const openCreateTicketModel = async (ack, client, sprintPayload, triggerID) => {
 };
 
 const createTicketConfirmation = async ({ ack, client, payload, body }) => {
-	const guuh = { 
+	const { 
 		title, 
 		description,
 		creator_name,
@@ -631,7 +653,6 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 			let msg = '';
 			
 			if (ticketResults) {
-				// DB save was successful
 				msg = 'Your submission was successful';
 
 				replaceEphemeralBlock(body.response_url, {
@@ -667,9 +688,15 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 	}
 };
 
-const createTicketCard = async (ack, body, view, context, client, selectedDate) => {
+const createTicketCard = async (ack, body, view, context, client, selectedDate, key) => {
 	try {
 		await ack();
+
+		if (!view) {
+			const results = await cachePayloadBetweenActions(body.key, null);
+
+			view = results;
+		} 
 
 	    const ticketParams = {
 	    	si, ci, ru, iu, su, cs
@@ -699,12 +726,18 @@ const createTicketCard = async (ack, body, view, context, client, selectedDate) 
 			selectedDate
 		};
 
+		key = uuidv4();	
+		cachePayloadBetweenActions(key, {
+			title,
+			description,
+			pm: {si, ci, ru, iu, su, cs}
+		});
+
 		const ticketContentPayload = (decision) => {
 			content.decision = decision;
 
 			return content;
 		};
-		
 
 		const blocksPayload = {
 			token: context.botToken,
@@ -744,11 +777,7 @@ const createTicketCard = async (ack, body, view, context, client, selectedDate) 
 				},
 				{
 					type: "section",
-					block_id: JSON.stringify({
-						title,
-						description,
-						pm: {si, ci, ru, iu, su, cs}
-					}),
+					block_id: JSON.stringify({userID: body.user.id, key, response_url: body.response_url}),
 					"text": {
 						"type": "mrkdwn",
 						"text": "Pick a date for the deadline."
