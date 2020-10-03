@@ -11,6 +11,8 @@ const {
 
 	openCreateTicketModel,
 	createTicketConfirmation,
+	openNewDateModel,
+	updateNewDateModelOnSelectChange,
 	createTicketCard,
 	makeTicketBlock,
 	openTicketCard,
@@ -69,6 +71,22 @@ const trackerActionRoutes = app => {
 		};
 		
 		createTicketCard(ack, body, viewPayload, context, client, null);
+	});
+	app.view('change_date_model', async ({ack, view}) => {
+		const { responseURL, blocks, userID, ticketID } = JSON.parse(view.private_metadata);
+
+		changeTicketStatus(selectedStatus, ticketID)
+			.then(async () => {
+				const blocks = await makeTicketBlock(ticketID, userID);
+
+				replaceEphemeralBlock(responseURL, blocks);
+			});
+		
+		ack();
+	});
+
+	app.action('redirect_newdate_change', async ({ack, client, body, payload, context}) => {
+		updateNewDateModelOnSelectChange(ack, client, context.botToken, body.view.id, body.view.private_metadata, payload.selected_date);
 	});
 
 	app.action('ticket_declined', createTicketConfirmation);
@@ -130,12 +148,13 @@ const trackerActionRoutes = app => {
 		createTicketCard(ack, { user: {id: userID}, key, response_url: body.response_url }, null, context, client, payload.selected_date);
 	});
 
-	app.action('redirect_from_status', async ({context, body, payload}) => {
+	app.action('redirect_from_status', async ({ack, context, body, payload, client}) => {
 		const redirectPayload = {
 			blockSrc, 
 			blockID,
 			selectedStatus, 
-			ticketID 
+			ticketID,
+			initialStatus
 		} = JSON.parse(payload.value);
 
 		switch (blockSrc) {
@@ -150,12 +169,16 @@ const trackerActionRoutes = app => {
 				break;
 
 			case 'ticket':
-				changeTicketStatus(selectedStatus, ticketID)
-					.then(async () => {
-						blocks = await makeTicketBlock(ticketID, body.user.id);
+				if (initialStatus && !selectedStatus) {
+					openNewDateModel(ack, body.trigger_id, client, {responseURL: body.response_url, userID: body.user.id, ticketID})
+				} else {
+					changeTicketStatus(selectedStatus, ticketID)
+						.then(async () => {
+							const blocks = await makeTicketBlock(ticketID, body.user.id);
 
-						replaceEphemeralBlock(body.response_url, blocks);
-					});
+							replaceEphemeralBlock(body.response_url, blocks);
+						});
+				}
 
 				break;
 		}

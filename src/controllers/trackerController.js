@@ -2,7 +2,7 @@ const cacheClient = require('../config/cache');
 const { Sprint, Assigned, Workers, Tickets } = require('../models/Tracker');
 const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
-console.log(uuidv4()); // ⇨ '1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed'
+
 
 
 function cacheIfFieldDoesNotExist(paramFromRequest, paramType, queryObj={}) {
@@ -688,6 +688,115 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 	}
 };
 
+const openNewDateModel = async (ack, triggerID, client, ticketConfirmationPayload, selectedDate) => {
+	try {
+		await ack();
+
+		const today = new Date();
+		const {yyyy, mm, dd} = {	
+			dd: String(today.getDate()).padStart(2, '0'),
+			mm: String(today.getMonth() + 1).padStart(2, '0'), //January is 0!
+			yyyy: today.getFullYear()
+		};
+
+		const result = await client.views.open({
+			trigger_id: triggerID,
+			view: {
+				type: 'modal',
+				private_metadata: JSON.stringify(ticketConfirmationPayload),
+				callback_id: 'change_date_model',
+				title: {
+					type: 'plain_text',
+					text: 'Select new deadline'
+				},
+				blocks: [
+					{
+						type: "section",
+						block_id: "blah",
+						"text": {
+							"type": "mrkdwn",
+							"text": "Pick a new date for the deadline."
+						},
+						accessory: {
+							"type": "datepicker",
+							"initial_date": selectedDate || `${yyyy}-${mm}-${dd}`,
+							action_id: "redirect_newdate_change",
+							"placeholder": {
+								"type": "plain_text",
+								"text": "Select a date",
+								"emoji": true
+							}
+						}
+					}
+				],
+				submit: {
+				    type: 'plain_text',
+				    text: 'Submit'
+				}
+			}
+		});
+
+		console.log(result.ok);
+	} catch (err) {
+		console.log(err)
+	}
+};
+
+const updateNewDateModelOnSelectChange = async (ack, client, botToken, id, ticketConfirmationPayload, selectedDate) => {
+	try {
+		await ack();
+
+		const today = new Date();
+		const {yyyy, mm, dd} = {	
+			dd: String(today.getDate()).padStart(2, '0'),
+			mm: String(today.getMonth() + 1).padStart(2, '0'), //January is 0!
+			yyyy: today.getFullYear()
+		};
+
+		const result = await client.views.update({
+			token: botToken,
+			view: {
+				type: 'modal',
+				private_metadata: ticketConfirmationPayload,
+				callback_id: 'change_date_model',
+				title: {
+					type: 'plain_text',
+					text: 'Select new deadline'
+				},
+				blocks: [
+					{
+						type: "section",
+						block_id: "blah",
+						"text": {
+							"type": "mrkdwn",
+							"text": "Pick a new date for the deadline."
+						},
+						accessory: {
+							"type": "datepicker",
+							"initial_date": selectedDate || `${yyyy}-${mm}-${dd}`,
+							action_id: "redirect_newdate_change",
+							"placeholder": {
+								"type": "plain_text",
+								"text": "Select a date",
+								"emoji": true
+							}
+						}
+					}
+				],
+				submit: {
+				    type: 'plain_text',
+				    text: 'Submit'
+				}
+			},
+			view_id: id
+		});
+
+		console.log(result.ok);
+	} catch (err) {
+		console.log(err)
+	}
+};
+
 const createTicketCard = async (ack, body, view, context, client, selectedDate, key) => {
 	try {
 		await ack();
@@ -854,7 +963,8 @@ const makeTicketBlock = async (ticketID, userID) => {
 		const redirectPayload = {
 			blockSrc: 'sprint',
 			blockID: data[0].title,
-			ticketID
+			ticketID,
+			initialStatus: status
 		};
 
 		const blocks = {
@@ -1009,6 +1119,8 @@ const changeTicketStatus = async (selectedStatus, ticketID) => {
 		ticket.status = selectedStatus;
 
 		await ticket.save();
+console.log('first')
+		return !!ticket;
 	} catch (err) {
 		console.log(err)
 	}
@@ -1113,6 +1225,8 @@ const replaceEphemeralBlock = async (responseURL, blocks) => {
 
 		const result = await response.json();
 		console.log(result);
+				console.log('second')
+
 	} catch (err) {
 		console.log(err);
 	}
@@ -1176,6 +1290,8 @@ module.exports = {
 
 	openCreateTicketModel,
 	createTicketConfirmation,
+	openNewDateModel,
+	updateNewDateModelOnSelectChange,
 	createTicketCard,
 	makeTicketBlock,
 	openTicketCard,
