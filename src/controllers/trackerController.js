@@ -2,6 +2,8 @@ const cacheClient = require('../config/cache');
 const { Sprint, Assigned, Workers, Tickets } = require('../models/Tracker');
 const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
+const { yyyy, mm, dd } = require('../assets/formatDate');
+const { inHours, inDays, convertFullDate } = require('../assets/formatDate');
 
 
 
@@ -158,12 +160,13 @@ const makeSprintListBlock = async (botToken, channelID, userID) => {
 		} else {
 			sprints.forEach(sprint => {
 				const {id, title, admin_sid, createdAt, status} = sprint;
+				const fullDatePayload = convertFullDate(new Date(createdAt));
 
 				blocksPayload.blocks.push({
 					"type": "section",
 					"text": {
 						"type": "mrkdwn",
-						"text": `*${title}* ${createdAt} <@${admin_sid}> ${status}`
+						"text": `${(status) ? ':heavy_check_mark:' : ':x:'} *${title}* | Admin: <@${admin_sid}> | Posted on ${fullDatePayload.mm}/${fullDatePayload.dd}/${fullDatePayload.yyyy}`
 					},
 					"accessory": {
 						"type": "button",
@@ -390,13 +393,42 @@ const makeSprintBlock = async (botToken, channelID, userID, sprintName) => {
 			})
 		} else {
 			tickets.forEach(ticket => {
-				const { title, createdAt, creator_sid, status } = ticket;
+				const { title, deadline, createdAt, updatedAt, creator_sid, status } = ticket;
+				
+				const updatedFormatPayload = {
+					flatDaysLeft: inDays(new Date(updatedAt)),
+					exactDaysLeft: inHours(new Date(updatedAt))/24,
+				};
+				const updatedRemainder = Math.floor((updatedFormatPayload.exactDaysLeft - updatedFormatPayload.flatDaysLeft)*24);
 
+				const deadlineFormatPayload = {
+					flatDaysLeft: inDays(new Date(deadline)),
+					exactDaysLeft: inHours(new Date(deadline))/24,
+				};
+				const deadlineRemainder = Math.floor((deadlineFormatPayload.exactDaysLeft - deadlineFormatPayload.flatDaysLeft)*24);
+				
+				const ticketListStats = () => {
+					const icon = `${(deadlineRemainder < 0 && !status) ? ':warning:' : (status) ? ':star2:' : ':clock7:'} `;
+					const middleText = `*${title}* | <@${creator_sid}> | `;
+					const dueFormat = `${(deadlineRemainder < 0 && !status) ? 
+							`PAST DUE ${Math.floor(Math.abs(deadlineFormatPayload.flatDaysLeft))} day(s) ago` 
+						 : 
+							(status) ? 
+								`Finished ${Math.floor(Math.abs(updatedFormatPayload.flatDaysLeft))} day(s) ago` 
+							 : 
+								`Due in ${deadlineFormatPayload.flatDaysLeft} d ${deadlineRemainder} hr`
+						}
+					`;
+					const fullText = icon + middleText + dueFormat;
+
+					return fullText;
+				};
+				
 				blocksPayload.blocks.push({
 					"type": "section",
 					"text": {
 						"type": "mrkdwn",
-						"text": `${(status) ? ':star2:' : ':clock7:'} *${title}* <@${creator_sid}> ${createdAt}`
+						"text": ticketListStats()
 					},
 					"accessory": {
 						"type": "button",
@@ -692,13 +724,6 @@ const openNewDateModel = async (ack, triggerID, client, ticketConfirmationPayloa
 	try {
 		await ack();
 
-		const today = new Date();
-		const {yyyy, mm, dd} = {	
-			dd: String(today.getDate()).padStart(2, '0'),
-			mm: String(today.getMonth() + 1).padStart(2, '0'), //January is 0!
-			yyyy: today.getFullYear()
-		};
-
 		const result = await client.views.open({
 			trigger_id: triggerID,
 			view: {
@@ -745,13 +770,6 @@ const openNewDateModel = async (ack, triggerID, client, ticketConfirmationPayloa
 const updateNewDateModelOnSelectChange = async (ack, client, botToken, id, ticketConfirmationPayload, selectedDate) => {
 	try {
 		await ack();
-
-		const today = new Date();
-		const {yyyy, mm, dd} = {	
-			dd: String(today.getDate()).padStart(2, '0'),
-			mm: String(today.getMonth() + 1).padStart(2, '0'), //January is 0!
-			yyyy: today.getFullYear()
-		};
 
 		const result = await client.views.update({
 			token: botToken,
@@ -813,19 +831,12 @@ const createTicketCard = async (ack, body, view, context, client, selectedDate, 
 
 		const data = await cacheIfFieldDoesNotExist(si, 'sprintByID');
 
-		const today = new Date();
-		const {yyyy, mm, dd} = {	
-			dd: String(today.getDate()).padStart(2, '0'),
-			mm: String(today.getMonth() + 1).padStart(2, '0'), //January is 0!
-			yyyy: today.getFullYear()
-		};
-
 		const content = { title, description, creator_sid, sprint_name, deadline, si, ci, ru, iu, su } = {
 			title: view.title,
 			description: view.description,
 			creator_sid: body.user.id,
 			status: false,
-			deadline: selectedDate || `${yyyy}-${mm}-${dd}`,
+			deadline: selectedDate || `${yyyy}-${mm}-${dd} 8:00`,
 			sprint_name: data[0].title,
 			si,
 			ci,
@@ -1119,8 +1130,6 @@ const changeTicketStatus = async (selectedStatus, ticketID) => {
 		ticket.status = selectedStatus;
 
 		await ticket.save();
-console.log('first')
-		return !!ticket;
 	} catch (err) {
 		console.log(err)
 	}
@@ -1225,8 +1234,6 @@ const replaceEphemeralBlock = async (responseURL, blocks) => {
 
 		const result = await response.json();
 		console.log(result);
-				console.log('second')
-
 	} catch (err) {
 		console.log(err);
 	}
