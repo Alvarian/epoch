@@ -1,5 +1,5 @@
 const today = new Date();
-const {yyyy, mm, dd} = {    
+const todayFullDate = {    
     dd: String(today.getDate()).padStart(2, '0'),
     mm: String(today.getMonth() + 1).padStart(2, '0'), //January is 0!
     yyyy: today.getFullYear()
@@ -51,5 +51,5 @@ function inYears(d1) {
 
 
 module.exports = {
-    inHours, inDays, inWeeks, inMonths, inYears, convertFullDate
+    inHours, inDays, inWeeks, inMonths, inYears, convertFullDate, todayFullDate
 };

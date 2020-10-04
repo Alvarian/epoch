@@ -2,8 +2,7 @@ const cacheClient = require('../config/cache');
 const { Sprint, Assigned, Workers, Tickets } = require('../models/Tracker');
 const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
-const { yyyy, mm, dd } = require('../assets/formatDate');
-const { inHours, inDays, convertFullDate } = require('../assets/formatDate');
+const { inHours, inDays, convertFullDate, todayFullDate } = require('../assets/formatDate');
 
 
 
@@ -724,6 +723,8 @@ const openNewDateModel = async (ack, triggerID, client, ticketConfirmationPayloa
 	try {
 		await ack();
 
+		const { yyyy, mm, dd } = todayFullDate;
+
 		const result = await client.views.open({
 			trigger_id: triggerID,
 			view: {
@@ -771,11 +772,16 @@ const updateNewDateModelOnSelectChange = async (ack, client, botToken, id, ticke
 	try {
 		await ack();
 
+		const openedPayload = JSON.parse(ticketConfirmationPayload)
+		openedPayload.newDeadline = selectedDate+" 8:00";
+
+		ticketConfirmationPayload = openedPayload;
+
 		const result = await client.views.update({
 			token: botToken,
 			view: {
 				type: 'modal',
-				private_metadata: ticketConfirmationPayload,
+				private_metadata: JSON.stringify(ticketConfirmationPayload),
 				callback_id: 'change_date_model',
 				title: {
 					type: 'plain_text',
@@ -1123,11 +1129,15 @@ const openTicketCard = async (ack, client, responseURL, ticketID, userID) => {
 	}
 };
 
-const changeTicketStatus = async (selectedStatus, ticketID) => {
+const changeTicketStatus = async (selectedStatus, ticketID, newDeadline=null) => {
 	try {
 		const ticket = await Tickets.findOne({ where: { id: ticketID } });
 
 		ticket.status = selectedStatus;
+
+		if (newDeadline) {
+			ticket.deadline = newDeadline;
+		}
 
 		await ticket.save();
 	} catch (err) {

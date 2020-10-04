@@ -72,10 +72,10 @@ const trackerActionRoutes = app => {
 		
 		createTicketCard(ack, body, viewPayload, context, client, null);
 	});
-	app.view('change_date_model', async ({ack, view}) => {
-		const { responseURL, blocks, userID, ticketID } = JSON.parse(view.private_metadata);
+	app.view('change_date_model', async ({ack, view, payload}) => {
+		const { responseURL, blocks, userID, ticketID, newDeadline } = JSON.parse(view.private_metadata);
 
-		changeTicketStatus(selectedStatus, ticketID)
+		changeTicketStatus(selectedStatus, ticketID, newDeadline)
 			.then(async () => {
 				const blocks = await makeTicketBlock(ticketID, userID);
 
