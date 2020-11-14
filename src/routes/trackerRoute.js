@@ -22,7 +22,9 @@ const {
 
 	removeEphemeralBlock,
 	replaceEphemeralBlock,
-	removeMessageBlock
+	removeMessageBlock,
+	handleIncorrectCommand,
+	openHelpIndexCard
 } = require('../controllers/trackerController');
 
 
@@ -47,7 +49,7 @@ const trackCommandRoutes = module => {
 
 		case 'open sprint':
 			openSprintCard(ack, client, context.botToken, body.channel_id, body.user_id, project, body.response_url);
-			//ack, client, botToken, channelID, userID, sprintName, responseURL
+
 			break;
 
 		case 'open sprints':
@@ -56,7 +58,8 @@ const trackCommandRoutes = module => {
 			break;
 
 		default:
-			console.log('no match');
+			handleIncorrectCommand(ack, client, context.botToken, body.response_url, body.channel_id, body.user_id, body.text);
+
 			break;
 	}
 };
@@ -69,7 +72,6 @@ const trackerActionRoutes = app => {
 			description: view['state']['values']['ticket_desc_block']['description_input']['value'], 
 			pm: JSON.parse(view.private_metadata) 
 		};
-		
 		createTicketCard(ack, body, viewPayload, context, client, null);
 	});
 	app.view('change_date_model', async ({ack, view, payload}) => {
@@ -213,6 +215,9 @@ const trackerActionRoutes = app => {
 				break;
 		}
 	});
+
+	app.action('open_help_index', openHelpIndexCard);
+
 
 	app.action('close_message', removeMessageBlock);
 	app.action('close_ephemeral', removeEphemeralBlock);

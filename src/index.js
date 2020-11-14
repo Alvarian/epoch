@@ -28,7 +28,8 @@ app.command('/search', archiverRoute);
 
 (async () => {
   // Start your app
-  await app.start(process.env.PORT || 3000);
+  const PORT = process.env.PORT || 3000;
+  await app.start(PORT);
 
-  console.log('⚡️ Bolt app is running!');
+  console.log(`⚡️ Bolt app is running on port ${PORT}!`);
 })();

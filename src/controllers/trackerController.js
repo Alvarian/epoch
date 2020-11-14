@@ -1,7 +1,7 @@
-const cacheClient = require('../config/cache');
-const { Sprint, Assigned, Workers, Tickets } = require('../models/Tracker');
 const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
+const cacheClient = require('../config/cache');
+const { Sprint, Assigned, Workers, Tickets } = require('../models/Tracker');
 const { inHours, inDays, convertFullDate, todayFullDate } = require('../assets/formatDate');
 
 
@@ -676,7 +676,7 @@ const createTicketConfirmation = async ({ ack, client, payload, body }) => {
 				creator_name,
 				creator_sid,
 				status,
-				deadline,
+				deadline: deadline+" 8:00",
 				sprint_id: si,
 				worker_id: await findOrRegisterWorker()
 			});
@@ -837,12 +837,14 @@ const createTicketCard = async (ack, body, view, context, client, selectedDate, 
 
 		const data = await cacheIfFieldDoesNotExist(si, 'sprintByID');
 
+		const {yyyy, mm, dd} = todayFullDate;
+
 		const content = { title, description, creator_sid, sprint_name, deadline, si, ci, ru, iu, su } = {
 			title: view.title,
 			description: view.description,
 			creator_sid: body.user.id,
 			status: false,
-			deadline: selectedDate || `${yyyy}-${mm}-${dd} 8:00`,
+			deadline: selectedDate || `${yyyy}-${mm}-${dd}`,
 			sprint_name: data[0].title,
 			si,
 			ci,
@@ -949,7 +951,7 @@ const createTicketCard = async (ack, body, view, context, client, selectedDate, 
 			]
 		}
 
-		if (!selectedDate) {	
+		if (!selectedDate) {
 			client.chat.postMessage(blocksPayload);
 		} else {
 			replaceEphemeralBlock(body.response_url, blocksPayload);
@@ -1293,6 +1295,70 @@ const removeEphemeralBlock = async (module) => {
 	}
 };
 
+const handleIncorrectCommand = async (ack, client, botToken, responseURL, channelID, userID, userInput) => {
+	try {
+		await ack();
+
+		const blocksPayload = {
+			token: botToken,
+			channel: channelID,
+			user: userID,
+			"blocks": [
+				{
+					"type": "section",
+					"text": {
+						"type": "mrkdwn",
+						"text": "`/track "+userInput+"` is not an existing command!"
+					}
+				},
+				{
+					"type": "divider"
+				},
+				{
+					"type": "section",
+					"text": {
+						"type": "mrkdwn",
+						"text": "For a list of Epoch commands, please refer to the help index"
+					},
+					"accessory": {
+						"type": "button",
+						"text": {
+							"type": "plain_text",
+							"text": "Open Index",
+							"emoji": true
+						},
+						"action_id": "open_help_index"
+					}
+				},
+				{
+					"type": "actions",
+					"elements": [
+						{
+							"type": "button",
+							"text": {
+								"type": "plain_text",
+								"text": "Close",
+								"emoji": true
+							},
+							style: "danger",
+							"action_id": "close_ephemeral"
+						}
+					]
+				}
+			]
+		};
+
+		await client.chat.postEphemeral(blocksPayload);
+	} catch (err) {
+		console.log(err);
+	}
+};
+
+const openHelpIndexCard = async (module) => {
+	const {body, payload} = module;
+	console.log(body, payload)
+};
+
 
 module.exports = { 
 	getProjAdminToSayHello,
@@ -1318,5 +1384,6 @@ module.exports = {
 
 	replaceEphemeralBlock,
 	removeEphemeralBlock,
-	removeMessageBlock
+	removeMessageBlock,
+	handleIncorrectCommand
 };
