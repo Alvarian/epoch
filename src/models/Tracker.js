@@ -25,6 +25,10 @@ const Sprint = database.define('sprints',
 			type: Sequelize.BOOLEAN,
 			allowNull: false
 		},
+		deadline: {
+			type: Sequelize.STRING,
+			allowNull: true
+		},
 		
 		// Timestamps
 		createdAt: {

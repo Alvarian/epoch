@@ -110,6 +110,12 @@ function cachePayloadBetweenActions(key, payload) {
 	});
 }
 
+async function isContentActiveBasedOnSprintStatus(sprintID) {
+	const sprint = await Sprint.findOne({ where: { sprintID } });
+
+	console.log(sprint);
+}
+
 const getProjAdminToSayHello = async ({ say, ack }, param) => {
 	try {
 		await ack();
@@ -158,14 +164,44 @@ const makeSprintListBlock = async (botToken, channelID, userID) => {
 			})
 		} else {
 			sprints.forEach(sprint => {
-				const {id, title, admin_sid, createdAt, status} = sprint;
+				const {id, title, admin_sid, createdAt, updatedAt, deadline, status} = sprint;
 				const fullDatePayload = convertFullDate(new Date(createdAt));
+
+				
+				const updatedFormatPayload = {
+					flatDaysLeft: inDays(new Date(updatedAt)),
+					exactDaysLeft: inHours(new Date(updatedAt))/24,
+				};
+				const updatedRemainder = Math.floor((updatedFormatPayload.exactDaysLeft - updatedFormatPayload.flatDaysLeft)*24);
+
+				const deadlineFormatPayload = {
+					flatDaysLeft: inDays(new Date(deadline)),
+					exactDaysLeft: inHours(new Date(deadline))/24,
+				};
+				const deadlineRemainder = Math.floor((deadlineFormatPayload.exactDaysLeft - deadlineFormatPayload.flatDaysLeft)*24);
+				
+				const sprintListStats = () => {
+					const icon = `${(deadlineRemainder < 0 && !status) ? ':warning:' : (status) ? ':star2:' : ':clock7:'} `;
+					const middleText = `*${title}* | Creator: <@${admin_sid}> | `;
+					const dueFormat = `${(deadlineRemainder < 0 && !status) ? 
+							`PAST DUE ${Math.floor(Math.abs(deadlineFormatPayload.flatDaysLeft))} day(s) ago` 
+						 : 
+							(status) ? 
+								`Finished ${Math.floor(Math.abs(updatedFormatPayload.flatDaysLeft))} day(s) ago` 
+							 : 
+								`Due in ${deadlineFormatPayload.flatDaysLeft} d ${deadlineRemainder} hr`
+						}
+					`;
+					const fullText = icon + middleText + dueFormat;
+
+					return fullText;
+				};
 
 				blocksPayload.blocks.push({
 					"type": "section",
 					"text": {
 						"type": "mrkdwn",
-						"text": `${(status) ? ':heavy_check_mark:' : ':x:'} *${title}* | Admin: <@${admin_sid}> | Posted on ${fullDatePayload.mm}/${fullDatePayload.dd}/${fullDatePayload.yyyy}`
+						"text": sprintListStats()
 					},
 					"accessory": {
 						"type": "button",
@@ -1288,7 +1324,7 @@ const removeEphemeralBlock = async (module) => {
 		    headers: { 'Content-Type': 'application/json' },
 		});
 
-		const result = response.json();
+		const result = await response.json();
 		console.log(result);
 	} catch (err) {
 		console.log(err);
