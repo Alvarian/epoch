@@ -15,6 +15,13 @@ function convertFullDate(fullDate) {
     return fullDatePayload;
 }
 
+function differenceOfTwoDates(d1, d2) {
+    let selected = d1.getTime();
+    let initial = d2.getTime();
+
+    return parseInt((selected-initial)/(3600*1000));
+}
+
 function inHours(d1) {
     var t2 = today.getTime();
     var t1 = d1.getTime();
@@ -51,5 +58,5 @@ function inYears(d1) {
 
 
 module.exports = {
-    inHours, inDays, inWeeks, inMonths, inYears, convertFullDate, todayFullDate
+    inHours, inDays, inWeeks, inMonths, inYears, convertFullDate, todayFullDate, differenceOfTwoDates, today
 };

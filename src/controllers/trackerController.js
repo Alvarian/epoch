@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
 const cacheClient = require('../config/cache');
 const { Sprint, Assigned, Workers, Tickets } = require('../models/Tracker');
-const { inHours, inDays, convertFullDate, todayFullDate } = require('../assets/formatDate');
+const { inHours, inDays, convertFullDate, todayFullDate, differenceOfTwoDates, today } = require('../assets/formatDate');
 
 
 
@@ -116,6 +116,23 @@ async function isContentActiveBasedOnSprintStatus(sprintID) {
 	console.log(sprint);
 }
 
+function selectTomorrowIfAfterTodaysMorning() {	
+	const {yyyy, mm, dd} = todayFullDate;
+
+	const todaysMorning = new Date(`${yyyy}-${mm}-${dd} 8:00`).getTime();
+	const tomorrowsMorning = new Date(todaysMorning + 60 * 60 * 24 * 1000);
+	const full = convertFullDate(tomorrowsMorning);
+
+	return (todaysMorning - today.getTime() > 0) ? `${yyyy}-${mm}-${dd}` : `${full.yyyy}-${full.mm}-${full.dd}`;
+}
+
+function isAfterCurrentDayMorning(date) {
+	const initialDate = new Date(selectTomorrowIfAfterTodaysMorning());
+	const isAfter = differenceOfTwoDates(new Date(date), initialDate) >= 0;
+
+	return (isAfter) ? date : null;
+}
+
 const getProjAdminToSayHello = async ({ say, ack }, param) => {
 	try {
 		await ack();
@@ -183,7 +200,8 @@ const makeSprintListBlock = async (botToken, channelID, userID) => {
 				const sprintListStats = () => {
 					const icon = `${(deadlineRemainder < 0 && !status) ? ':warning:' : (status) ? ':star2:' : ':clock7:'} `;
 					const middleText = `*${title}* | Creator: <@${admin_sid}> | `;
-					const dueFormat = `${(deadlineRemainder < 0 && !status) ? 
+					const dueFormat = `
+						${(deadlineRemainder < 0 && !status) ? 
 							`PAST DUE ${Math.floor(Math.abs(deadlineFormatPayload.flatDaysLeft))} day(s) ago` 
 						 : 
 							(status) ? 
@@ -264,7 +282,9 @@ const openSprintList = async (ack, client, botToken, response_url, channel_id, u
 
 
 
-const openCreateSprintModel =  async (ack, channelID, responseURL, triggerID, client, sprintName, isFromList) => {
+const openCreateSprintModel =  async (ack, channelID, responseURL, triggerID, client, sprintName) => {
+	const {yyyy, mm, dd} = todayFullDate;
+
 	try {
 		await ack();
 
@@ -274,8 +294,7 @@ const openCreateSprintModel =  async (ack, channelID, responseURL, triggerID, cl
 				type: 'modal',
 				private_metadata: JSON.stringify({
 					channelID, 
-					responseURL,
-					isFromList
+					responseURL
 				}),
 				callback_id: 'create_sprint_model',
 				title: {
@@ -309,6 +328,24 @@ const openCreateSprintModel =  async (ack, channelID, responseURL, triggerID, cl
 							action_id: 'description_input',
 							multiline: true
 						}
+					},
+					{
+						type: "section",
+						block_id: "blah",
+						"text": {
+							"type": "mrkdwn",
+							"text": "Pick a new date for the deadline."
+						},
+						accessory: {
+							"type": "datepicker",
+							"initial_date": selectTomorrowIfAfterTodaysMorning(),
+							action_id: "redirect_newdate_sprint_change",
+							"placeholder": {
+								"type": "plain_text",
+								"text": "Select a date",
+								"emoji": true
+							}
+						}
 					}
 				],
 				submit: {
@@ -317,6 +354,85 @@ const openCreateSprintModel =  async (ack, channelID, responseURL, triggerID, cl
 				}
 			}
 		});
+
+		console.log(result.ok);
+	} catch (error) {
+		console.error(error);
+	}
+};
+// HERE VVV
+const updateSprintModelOnSelectChange = async (ack, channelID, responseURL, botToken, client, viewID, selectedDate) => {
+	try {
+		await ack();
+
+		let blocks = {
+			token: botToken,
+			view: {
+				type: 'modal',
+				private_metadata: JSON.stringify({
+					channelID, 
+					responseURL
+				}),
+				callback_id: 'create_sprint_model',
+				title: {
+					type: 'plain_text',
+					text: 'Start Sprint'
+				},
+				blocks: [
+					{
+						type: 'input',
+						block_id: 'project_name_block',
+						label: {
+							type: 'plain_text',
+							text: 'Project Name'
+						},
+						element: {
+							type: 'plain_text_input',
+							action_id: 'title_input',
+							multiline: false
+						}
+					},
+					{
+						type: 'input',
+						block_id: 'project_desc_block',
+						label: {
+							type: 'plain_text',
+							text: 'Description'
+						},
+						element: {
+							type: 'plain_text_input',
+							action_id: 'description_input',
+							multiline: true
+						}
+					},
+					{
+						type: "section",
+						block_id: "blah",
+						"text": {
+							"type": "mrkdwn",
+							"text": (isAfterCurrentDayMorning(selectedDate)) ? "Pick a new date for the deadline." : "*Please select a deadline after the current time.* :warning:"
+						},
+						accessory: {
+							"type": "datepicker",
+							"initial_date": isAfterCurrentDayMorning(selectedDate) || selectTomorrowIfAfterTodaysMorning(),
+							action_id: "redirect_newdate_sprint_change",
+							"placeholder": {
+								"type": "plain_text",
+								"text": "Select a date",
+								"emoji": true
+							}
+						}
+					}
+				],
+				submit: {
+				    type: 'plain_text',
+				    text: 'Submit'
+				}
+			},
+			view_id: viewID
+		}
+
+		const result = await client.views.update(blocks);
 
 		console.log(result.ok);
 	} catch (error) {
@@ -1401,6 +1517,7 @@ module.exports = {
 	
 	openSprintList,
 	openCreateSprintModel,
+	updateSprintModelOnSelectChange,
 	createSprintCard,
 	makeSprintBlock,
 	makeSprintListBlock,

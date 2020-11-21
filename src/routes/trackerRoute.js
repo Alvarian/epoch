@@ -3,6 +3,7 @@ const {
 	 
 	openSprintList,
 	openCreateSprintModel,
+	updateSprintModelOnSelectChange,
 	createSprintCard,
 	makeSprintListBlock,
 	makeSprintBlock,
@@ -34,7 +35,7 @@ const trackCommandRoutes = module => {
 	// params to point to controller
 	const pointerDigest = command.text.split(' ');
 	const pointer = (pointerDigest.length > 2) ? pointerDigest.slice(0, pointerDigest.length-1).join(' ') : command.text;
-	const project = pointerDigest[pointerDigest.length-1];
+	const project = (pointerDigest.length > 2) ? pointerDigest.slice(2, pointerDigest.length) : null;
 	
 	switch (pointer) {
 		case 'say hello from':
@@ -148,6 +149,21 @@ const trackerActionRoutes = app => {
 		const { userID, key } = JSON.parse(payload.block_id);
 
 		createTicketCard(ack, { user: {id: userID}, key, response_url: body.response_url }, null, context, client, payload.selected_date);
+	});
+
+	app.action('redirect_newdate_sprint_change', async ({ack, body, payload, context, client}) => {
+		// ack, channelID, responseURL, botToken, client, sprintName, selectedDate
+		const pm = JSON.parse(body.view.private_metadata);
+		const { channelID, responseURL, botToken, viewID, selectedDate } = {
+			channelID: pm.channelID,
+			responseURL: pm.responseURL,
+			botToken: context.botToken,
+			viewID: body.view.id,
+			selectedDate: payload.selected_date
+		};
+		console.log(payload);
+
+		updateSprintModelOnSelectChange(ack, channelID, responseURL, botToken, client, viewID, selectedDate);
 	});
 
 	app.action('redirect_from_status', async ({ack, context, body, payload, client}) => {
