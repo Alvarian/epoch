@@ -1,8 +1,5 @@
 # Overview
-This is a bare basic web service, with the use of npm's "@slack/bolt" and also written in node.js, that enables your slack to have a full CRUD feature with simple text commands.
-
-In order for slack to communicate to this service, know it needs backdoor credentials generated from your slack workspace in order for this service to recognize it.
-Once those are in place, you can start trying out the commands.
+A bot with custom features, with the use of npm's "@slack/bolt" and also written in node.js, that enables your slack to have a full CRUD feature with simple text commands.
 
 :octocat:
 
