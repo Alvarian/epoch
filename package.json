@@ -1,6 +1,6 @@
 {
   "name": "epoch",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Slack Bot",
   "main": "src/index.js",
   "scripts": {
@@ -19,7 +19,7 @@
   },
   "homepage": "https://github.com/Alvarian/Epoch#readme",
   "dependencies": {
-    "@slack/bolt": "^2.3.0",
+    "@slack/bolt": "^3.12.2",
     "dotenv": "^8.2.0",
     "node-fetch": "^2.6.1",
     "pg": "^8.3.3",
