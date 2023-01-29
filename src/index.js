@@ -11,8 +11,10 @@ const app = new App({
 });
 
 // Bug Tracker
-const trackerRoute = require('./routes/trackerRoute');
-app.command('/track', trackerRoute);
+const { trackCommandRoutes, trackerActionRoutes } = require('./routes/trackerRoute');
+app.command('/track', trackCommandRoutes);
+// Action
+trackerActionRoutes(app);
 
 // Scheduler
 const schedulerRoute = require('./routes/schedulerRoute');
@@ -23,9 +25,11 @@ const archiverRoute = require('./routes/archiverRoute');
 app.command('/search', archiverRoute);
 
 
+
 (async () => {
   // Start your app
-  await app.start(process.env.PORT || 3000);
+  const PORT = process.env.PORT || 3000;
+  await app.start(PORT);
 
-  console.log('⚡️ Bolt app is running!');
+  console.log(`⚡️ Bolt app is running on port ${PORT}!`);
 })();
