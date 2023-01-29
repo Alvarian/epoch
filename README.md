@@ -1,5 +1,43 @@
-# Overview
-A bot with custom features, with the use of npm's "@slack/bolt" and also written in node.js, that enables your slack to have a full CRUD feature with simple text commands.
+# Introduction
+This project is a Node.js application that automates Slack using the Bolt framework. The application allows users to personalize Slack by using commands in Slack chat to perform tasks such as bug tracking, scheduling, and content storage.
+
+# Getting Started
+To get started with this project, you will need to have Node.js and npm installed on your machine. You can install the dependencies by running the following command:
+```
+npm install
+```
+
+Once the dependencies are installed, you will need to create a Slack app and configure it to use the Bolt framework. You can find more information on setting up a Slack app in the Slack API documentation (https://api.slack.com/).
+
+After setting up the Slack app, you will need to configure the application by setting the following environment variables:
+
+    BOT_ACCESS_TOKEN= The Slack bot token
+    SIGNING_SECRET= Slack signature
+    PORT= Main application port
+    REDIS_URL= Redis cloud url
+    PSQL_DB= Postgres Database Name
+    PSQL_USER= Postgres Main user
+    PSQL_PASS= Postgres User Password
+    PSQL_HOST= Postgres Host Url
+
+Once the environment variables are set, you can start the application by running the following command:
+```
+npm run start
+```
+
+# Usage
+The application can be used in Slack by sending commands in the chat. The following commands are supported:
+- `/track help`: List all commands for bug tracking.
+- `/track create sprint`: Start a new sprint to track a bug.
+- `/track open sprint <SPRINT NAME>`: Open one sprint.
+- `/track open sprints`: Open list of all sprints.
+
+# References
+- Node.js (https://nodejs.org/)
+- npm (https://www.npmjs.com/)
+- Slack API (https://api.slack.com/)
+- Bolt framework (https://slack.dev/bolt/)
+
 
 :octocat:
 
