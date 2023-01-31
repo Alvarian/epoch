@@ -18,11 +18,11 @@ trackerActionRoutes(app);
 
 // Scheduler
 const schedulerRoute = require('./routes/schedulerRoute');
-app.command('/schedule', schedulerRoute);
+app.command('/meet', schedulerRoute);
 
 // Message Archiver
 const archiverRoute = require('./routes/archiverRoute');
-app.command('/search', archiverRoute);
+app.command('/share', archiverRoute);
 
 
 

@@ -38,24 +38,29 @@ const trackCommandRoutes = module => {
 	const project = (pointerDigest.length > 2) ? pointerDigest.slice(2, pointerDigest.length) : null;
 	
 	switch (pointer) {
-		case 'say hello from':
+		case 'say hello':
 			getProjAdminToSayHello(module, project);
 			
 			break;
 
-		case 'create sprint':
-			openCreateSprintModel(ack, body.channel_id, body.response_url, body.trigger_id, client, project);
+		case 'new':
+			openCreateSprintModel(ack, body.channel_id, body.response_url, body.trigger_id, client, project, false);
 			
 			break;
 
-		case 'open sprint':
+		case 'sprint':
 			openSprintCard(ack, client, context.botToken, body.channel_id, body.user_id, project, body.response_url);
 
 			break;
 
-		case 'open sprints':
+		case 'sprints':
 			openSprintList(ack, client, context.botToken, body.response_url, body.channel_id, body.user_id);
 			
+			break;
+
+		case 'help':
+			openHelpIndexCard(ack, context.botToken, body.channel_id, body.user_id, body.response_url);
+		
 			break;
 
 		default:
@@ -161,7 +166,6 @@ const trackerActionRoutes = app => {
 			viewID: body.view.id,
 			selectedDate: payload.selected_date
 		};
-		console.log(payload);
 
 		updateSprintModelOnSelectChange(ack, channelID, responseURL, botToken, client, viewID, selectedDate);
 	});

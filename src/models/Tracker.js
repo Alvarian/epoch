@@ -39,8 +39,8 @@ const Sprint = database.define('sprints',
 			type: Sequelize.DATE,
 			field: 'updated_at'
 		}
-	}
-	,{
+	},
+	{
 		timestamps: true,
 		underscored: true,
 		freezeTableName: true
