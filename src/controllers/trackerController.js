@@ -145,6 +145,17 @@ const getProjAdminToSayHello = async ({ say, ack }, param) => {
 	}
 };
 
+const getNewestMember = async () =>  {
+	return new Promise((resolve, reject) => {
+		cacheClient.get("newestMember", async (err, cachedData) => {
+			if (err) throw err;
+
+			resolve(JSON.parse(cachedData));
+		});
+	});
+};
+const setNewestMember = userPayload => cacheClient.set("newestMember", JSON.stringify(userPayload));
+
 
 
 const makeSprintListBlock = async (botToken, channelID, userID) => {
@@ -1512,86 +1523,100 @@ const handleIncorrectCommand = async (ack, client, botToken, responseURL, channe
 	}
 };
 
-const openHelpIndexCard = async (ack, botToken, channelID, userID, responseURL) => {
+const openHelpIndexCard = async (ack, client, botToken, channelID, userID, hasResponseURL, userName) => {
   try {
-    await ack();
-
+	await ack();
+	
 	const blocksPayload = {
 		token: botToken,
 		channel: channelID,
 		user: userID,
+		text: "dude",
 		blocks: [
 			{
-				type: "header",
-				text: {
-					type: "plain_text",
-					text: `List of Commands Available`
+				"type": "header",
+				"text": {
+					"type": "plain_text",
+					"text": `List of Commands Available`
 				}
 			},
+			// {
+			// 	"type": "context",
+			// 	"elements": [
+			// 		{
+			// 		"text": `@${userName}`,
+			// 		"type": "plain_text"
+			// 		}
+			// 	]
+			// },
 			{
-				type: "context",
-				elements: [
+				"type": "context",
+				"elements": [
 					{
-					text: "`/track say hello` -> simple command to return a greeting",
-					type: "mrkdwn"
+						"text": "`/track say hello` -> simple command to return a greeting",
+						"type": "mrkdwn"
 					}
 				]
 			},
 			{
-				type: "context",
-				elements: [
+				"type": "context",
+				"elements": [
 					{
-					text: "`/track sprints` -> opens the main directory of all sprints in record",
-					type: "mrkdwn"
+					"text": "`/track sprints` -> opens the main directory of all sprints in record",
+					"type": "mrkdwn"
 					}
 				]
 			},
 			{
-				type: "context",
-				elements: [
+				"type": "context",
+				"elements": [
 					{
-					text: "`/track new` -> create new sprint",
-					type: "mrkdwn"
+					"text": "`/track new` -> create new sprint",
+					"type": "mrkdwn"
 					}
 				]
 			},
 			{
-				type: "context",
-				elements: [
+				"type": "context",
+				"elements": [
 					{
-					text: "`/track sprint <SPRINT NAME>` -> open one sprint",
-					type: "mrkdwn"
+					"text": "`/track sprint <SPRINT NAME>` -> open one sprint",
+					"type": "mrkdwn"
 					}
 				]
 			},
 			{
-				type: "context",
-				elements: [
+				"type": "context",
+				"elements": [
 					{
-					text: "`/track help` -> if you ever need to come back to this directory",
-					type: "mrkdwn"
+					"text": "`/track help` -> if you ever need to come back to this directory",
+					"type": "mrkdwn"
 					}
 				]
 			},
 			{
-				type: "actions",
-				elements: [
+				"type": "actions",
+				"elements": [
 					{
-						type: "button",
-						text: {
-							type: "plain_text",
-							text: "Close",
-							emoji: true
+						"type": "button",
+						"text": {
+							"type": "plain_text",
+							"text": "Close",
+							"emoji": true
 						},
-						style: "danger",
-						action_id: "close_ephemeral"
+						"style": "danger",
+						"action_id": "close_ephemeral"
 					}
 				]
 			}
 		]
 	};
 	
-    replaceEphemeralBlock(responseURL, blocksPayload);
+	if (hasResponseURL) {
+		replaceEphemeralBlock(hasResponseURL, blocksPayload);
+	} else {
+		client.chat.postEphemeral(blocksPayload);
+	}
   } catch (err) {
     console.log(err);
   }
@@ -1600,6 +1625,8 @@ const openHelpIndexCard = async (ack, botToken, channelID, userID, responseURL) 
 
 module.exports = { 
 	getProjAdminToSayHello,
+	getNewestMember,
+	setNewestMember,
 	
 	openSprintList,
 	openCreateSprintModel,
@@ -1625,5 +1652,6 @@ module.exports = {
 	removeEphemeralBlock,
 	removeMessageBlock,
 	handleIncorrectCommand,
-	openHelpIndexCard
+	openHelpIndexCard,
+	// openIntroCard
 };
