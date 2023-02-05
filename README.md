@@ -12,13 +12,10 @@ This project is a Node.js application that automates Slack using the Bolt framew
 We need to first configure your slack api. Visit https://api.slack.com/, login and then create a new app. Navigate to manage apps and then to your newly created app. 
 
 ![alt text](./assets/starting.png)
-Here at the default page, grab the signing secret. (SIGNING_SECRET)
-
-Navigate to OAUTH & Permissions and grab the Bot User OAuth Token. (BOT_ACCESS_TOKEN)
-
-Visit [upstash](https://upstash.com/) and start a free redis instance, grab the main url. (REDIS_URL)
-
-Lastly choose a cloud database that supports postgres instances, and grab the main url. I chose [supabase](https://supabase.com/). (PSQL_URL)
+* `SIGNING_SECRET`: at the default page, grab the signing secret
+* `BOT_ACCESS_TOKEN`: navigate to OAUTH & Permissions and grab the Bot User OAuth Token. 
+* `REDIS_URL`: visit [upstash](https://upstash.com/) and start a free redis instance, grab the main url. 
+* `PSQL_URL`: lastly choose a cloud database that supports postgres instances, and grab the main url. I chose [supabase](https://supabase.com/).
 
 Configure this project by setting the following environment variables:
 
