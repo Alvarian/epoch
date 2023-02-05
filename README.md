@@ -3,6 +3,7 @@
 ![](https://img.shields.io/badge/Supabase-181818?style=for-the-badge&logo=supabase&logoColor=white)
 ![](https://img.shields.io/badge/redis-%23DD0031.svg?&style=for-the-badge&logo=redis&logoColor=white)
 ![](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+***
 
 # Introduction
 This project is a Node.js application that automates Slack using the Bolt framework. The application allows users to personalize Slack by using commands in Slack chat to perform tasks such as bug tracking, scheduling, and content storage.
