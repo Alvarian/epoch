@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
 const cacheClient = require('../config/cache');
 const { Sprint, Assigned, Workers, Tickets } = require('../models/Tracker');
-const { inHours, inDays, convertFullDate, todayFullDate, differenceOfTwoDates, today } = require('../assets/formatDate');
+const { inHours, inDays, convertFullDate, todayFullDate, differenceOfTwoDates, today } = require('../bin/formatDate');
 
 
 
