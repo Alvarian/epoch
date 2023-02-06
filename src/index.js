@@ -1,4 +1,4 @@
-const { App } = require('@slack/bolt');
+const { App, WorkflowStep } = require('@slack/bolt');
 
 require('dotenv').config();
 const { BOT_ACCESS_TOKEN, SIGNING_SECRET, PORT } = process.env;
@@ -10,19 +10,21 @@ const app = new App({
   signingSecret: SIGNING_SECRET
 });
 
+
 // Bug Tracker
-const { trackCommandRoutes, trackerActionRoutes } = require('./routes/trackerRoute');
+const { trackCommandRoutes, trackerActionRoutes, trackerEventRoutes, trackerWorkflowRoutes } = require('./routes/trackerRoute');
 app.command('/track', trackCommandRoutes);
-// Action
 trackerActionRoutes(app);
+trackerEventRoutes(app);
+trackerWorkflowRoutes(app, WorkflowStep);
 
 // Scheduler
 const schedulerRoute = require('./routes/schedulerRoute');
-app.command('/schedule', schedulerRoute);
+app.command('/meet', schedulerRoute);
 
 // Message Archiver
 const archiverRoute = require('./routes/archiverRoute');
-app.command('/search', archiverRoute);
+app.command('/share', archiverRoute);
 
 
 

@@ -1,5 +1,7 @@
 const { 
 	getProjAdminToSayHello,
+	getNewestMember,
+	setNewestMember,
 	 
 	openSprintList,
 	openCreateSprintModel,
@@ -25,37 +27,43 @@ const {
 	replaceEphemeralBlock,
 	removeMessageBlock,
 	handleIncorrectCommand,
-	openHelpIndexCard
+	openHelpIndexCard,
+	// openIntroCard
 } = require('../controllers/trackerController');
 
 
 const trackCommandRoutes = module => {
-	const { message, say, command, client, context, body, ack } = module;
+	const { command, client, context, body, ack } = module;
 
 	// params to point to controller
 	const pointerDigest = command.text.split(' ');
 	const pointer = (pointerDigest.length > 2) ? pointerDigest.slice(0, pointerDigest.length-1).join(' ') : command.text;
 	const project = (pointerDigest.length > 2) ? pointerDigest.slice(2, pointerDigest.length) : null;
-	
+
 	switch (pointer) {
-		case 'say hello from':
+		case 'say hello':
 			getProjAdminToSayHello(module, project);
 			
 			break;
 
-		case 'create sprint':
-			openCreateSprintModel(ack, body.channel_id, body.response_url, body.trigger_id, client, project);
+		case 'new':
+			openCreateSprintModel(ack, body.channel_id, body.response_url, body.trigger_id, client, project, false);
 			
 			break;
 
-		case 'open sprint':
+		case 'sprint':
 			openSprintCard(ack, client, context.botToken, body.channel_id, body.user_id, project, body.response_url);
 
 			break;
 
-		case 'open sprints':
+		case 'sprints':
 			openSprintList(ack, client, context.botToken, body.response_url, body.channel_id, body.user_id);
 			
+			break;
+
+		case 'help':
+			openHelpIndexCard(ack, client, context.botToken, body.channel_id, body.user_id, body.response_url, body.user_name);
+		
 			break;
 
 		default:
@@ -161,7 +169,6 @@ const trackerActionRoutes = app => {
 			viewID: body.view.id,
 			selectedDate: payload.selected_date
 		};
-		console.log(payload);
 
 		updateSprintModelOnSelectChange(ack, channelID, responseURL, botToken, client, viewID, selectedDate);
 	});
@@ -232,11 +239,84 @@ const trackerActionRoutes = app => {
 		}
 	});
 
-	app.action('open_help_index', openHelpIndexCard);
+	// app.action('open_help_index', async (module) => {
+	// 	console.log(module)
+	// 	const {context, body, payload} = module;
+
+		// botToken, channelID, userID, responseURL
+		// switch (payload.value) {
+		// 	case "fromDir":
+		// 		openHelpIndexCard(context.botToken, body.channel_id, body.user_id, body.response_url);
+
+		// 		break;
+		// 	case "fromIntro":
+		// 		openHelpIndexCard(context.botToken, body.channel_id, body.user_id, body.response_url);
+				
+		// 		break;
+		// }
+	// });
 
 
 	app.action('close_message', removeMessageBlock);
 	app.action('close_ephemeral', removeEphemeralBlock);
 };
 
-module.exports = { trackCommandRoutes, trackerActionRoutes };
+const trackerEventRoutes = app => {
+	app.event('team_join', async ({ payload }) => {
+		setNewestMember([payload.user.id, payload.user.name]);
+	});
+};
+
+const trackerWorkflowRoutes = (app, Wf) => {
+	const openHelpFromIntro = new Wf('open_help_from_intro', {
+		edit: async ({ ack, step, configure }) => { await ack(); },
+		save: async ({ ack, step, view, update }) => {
+		  try {
+			await ack();
+	  
+			const inputs = {
+			  taskName: {value: "helpdirectory"},
+			  taskDescription: {value: "Open help directory from intro"}
+			};
+	  
+			const outputs = [
+			  {
+				type: 'text',
+				name: 'taskName',
+				label: 'Task name',
+			  },
+			  {
+				type: 'text',
+				name: 'taskDescription',
+				label: 'Task description',
+			  }
+			];
+	  
+			await update({ inputs, outputs });
+		  } catch (err) {
+			console.log(err)
+		  }
+		},
+		execute: async ({ step, complete, fail, client, context }) => {
+		  const { inputs } = step;
+	  
+		  const outputs = {
+			taskName: inputs.taskName.value,
+			taskDescription: inputs.taskDescription.value,
+		  };
+		  const newUserID = await getNewestMember();
+		  
+		  try {
+			// signal back to Slack that everything was successful
+
+			await complete({ outputs });
+		  } catch (err) {
+			await fail({ error: { message: err } });
+		  } finally {
+			openHelpIndexCard(() => {}, client, context.botToken, "C01B377AM0U", newUserID[0], false, newUserID[1]);
+		  }
+		},
+	}); app.step(openHelpFromIntro);
+}
+
+module.exports = { trackCommandRoutes, trackerActionRoutes, trackerEventRoutes, trackerWorkflowRoutes };

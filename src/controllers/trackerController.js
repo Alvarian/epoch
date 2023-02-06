@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
 const cacheClient = require('../config/cache');
 const { Sprint, Assigned, Workers, Tickets } = require('../models/Tracker');
-const { inHours, inDays, convertFullDate, todayFullDate, differenceOfTwoDates, today } = require('../assets/formatDate');
+const { inHours, inDays, convertFullDate, todayFullDate, differenceOfTwoDates, today } = require('../bin/formatDate');
 
 
 
@@ -145,6 +145,17 @@ const getProjAdminToSayHello = async ({ say, ack }, param) => {
 	}
 };
 
+const getNewestMember = async () =>  {
+	return new Promise((resolve, reject) => {
+		cacheClient.get("newestMember", async (err, cachedData) => {
+			if (err) throw err;
+
+			resolve(JSON.parse(cachedData));
+		});
+	});
+};
+const setNewestMember = userPayload => cacheClient.set("newestMember", JSON.stringify(userPayload));
+
 
 
 const makeSprintListBlock = async (botToken, channelID, userID) => {
@@ -282,7 +293,7 @@ const openSprintList = async (ack, client, botToken, response_url, channel_id, u
 
 
 
-const openCreateSprintModel =  async (ack, channelID, responseURL, triggerID, client, sprintName) => {
+const openCreateSprintModel =  async (ack, channelID, responseURL, triggerID, client, sprintName, isFromList) => {
 	const {yyyy, mm, dd} = todayFullDate;
 
 	try {
@@ -294,7 +305,8 @@ const openCreateSprintModel =  async (ack, channelID, responseURL, triggerID, cl
 				type: 'modal',
 				private_metadata: JSON.stringify({
 					channelID, 
-					responseURL
+					responseURL,
+					isFromList
 				}),
 				callback_id: 'create_sprint_model',
 				title: {
@@ -332,7 +344,7 @@ const openCreateSprintModel =  async (ack, channelID, responseURL, triggerID, cl
 					{
 						type: "section",
 						block_id: "blah",
-						"text": {
+						text: {
 							"type": "mrkdwn",
 							"text": "Pick a new date for the deadline."
 						},
@@ -695,9 +707,14 @@ const openSprintCard = async (ack, client, botToken, channelID, userID, sprintNa
 };
 
 const deleteSprint = async (id) => {
-	const sprint = await Sprint.findOne({ where: { id } });
+	try {
+		const hasTicket = (await Tickets.findOne({ where: { sprint_id: id } }))?.dataValues.id;
 
-	await sprint.destroy();
+		if (hasTicket) await Tickets.destroy({ where: { id: hasTicket }});
+		await Sprint.destroy({ where: {id} })
+	} catch (err) {
+		console.log(err);
+	}
 };
 
 
@@ -1396,7 +1413,7 @@ const replaceEphemeralBlock = async (responseURL, blocks) => {
 		    headers: { 'Content-Type': 'application/json' },
 		});
 
-		const result = await response.json();
+		const result = await response.text();
 		console.log(result);
 	} catch (err) {
 		console.log(err);
@@ -1426,7 +1443,7 @@ const removeMessageBlock = async (module) => {
 
 const removeEphemeralBlock = async (module) => {
 	const { ack, body, context, client } = module;
-
+	
 	try {
 		await ack();
 
@@ -1506,14 +1523,110 @@ const handleIncorrectCommand = async (ack, client, botToken, responseURL, channe
 	}
 };
 
-const openHelpIndexCard = async (module) => {
-	const {body, payload} = module;
-	console.log(body, payload)
+const openHelpIndexCard = async (ack, client, botToken, channelID, userID, hasResponseURL, userName) => {
+  try {
+	await ack();
+	
+	const blocksPayload = {
+		token: botToken,
+		channel: channelID,
+		user: userID,
+		text: "dude",
+		blocks: [
+			{
+				"type": "header",
+				"text": {
+					"type": "plain_text",
+					"text": `List of Commands Available`
+				}
+			},
+			// {
+			// 	"type": "context",
+			// 	"elements": [
+			// 		{
+			// 		"text": `@${userName}`,
+			// 		"type": "plain_text"
+			// 		}
+			// 	]
+			// },
+			{
+				"type": "context",
+				"elements": [
+					{
+						"text": "`/track say hello` -> simple command to return a greeting",
+						"type": "mrkdwn"
+					}
+				]
+			},
+			{
+				"type": "context",
+				"elements": [
+					{
+					"text": "`/track sprints` -> opens the main directory of all sprints in record",
+					"type": "mrkdwn"
+					}
+				]
+			},
+			{
+				"type": "context",
+				"elements": [
+					{
+					"text": "`/track new` -> create new sprint",
+					"type": "mrkdwn"
+					}
+				]
+			},
+			{
+				"type": "context",
+				"elements": [
+					{
+					"text": "`/track sprint <SPRINT NAME>` -> open one sprint",
+					"type": "mrkdwn"
+					}
+				]
+			},
+			{
+				"type": "context",
+				"elements": [
+					{
+					"text": "`/track help` -> if you ever need to come back to this directory",
+					"type": "mrkdwn"
+					}
+				]
+			},
+			{
+				"type": "actions",
+				"elements": [
+					{
+						"type": "button",
+						"text": {
+							"type": "plain_text",
+							"text": "Close",
+							"emoji": true
+						},
+						"style": "danger",
+						"action_id": "close_ephemeral"
+					}
+				]
+			}
+		]
+	};
+	
+	if (hasResponseURL) {
+		replaceEphemeralBlock(hasResponseURL, blocksPayload);
+	} else {
+		client.chat.postEphemeral(blocksPayload);
+	}
+  } catch (err) {
+    console.log(err);
+  }
 };
 
 
 module.exports = { 
 	getProjAdminToSayHello,
+	getNewestMember,
+	setNewestMember,
 	
 	openSprintList,
 	openCreateSprintModel,
@@ -1538,5 +1651,7 @@ module.exports = {
 	replaceEphemeralBlock,
 	removeEphemeralBlock,
 	removeMessageBlock,
-	handleIncorrectCommand
+	handleIncorrectCommand,
+	openHelpIndexCard,
+	// openIntroCard
 };
