@@ -56,9 +56,8 @@ At the point of running this app, permission errors and missing scope errors wil
 ## Usage
 The application can be used in Slack by sending commands in the chat. The following commands are supported:
 - `/track help`: List all commands for bug tracking.
-- `/track create sprint`: Start a new sprint to track a bug.
-- `/track open sprint <SPRINT NAME>`: Open one sprint.
-- `/track open sprints`: Open list of all sprints.
+- `/track new`: Start a new sprint to track a bug.
+- `/track sprints`: Open list of all sprints.
 
 # References
 - Node.js (https://nodejs.org/)
