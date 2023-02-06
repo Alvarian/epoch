@@ -38,15 +38,15 @@ ngrok http 3000
 ```
 Copy the "Forwarding" url, ex: https://7d0b-173-52-201-90.ngrok.io, to use in the next step.
 
-Go back to you slack api page and navigate to 'Interactivity & Shortcuts' on the side menu:
+1. Go back to you slack api page and navigate to 'Interactivity & Shortcuts' on the side menu:
 ![alt text](./assets/interactivity.png)
 In the request url input field, paste your link with /slack/events added to the end of it, ex: https://7d0b-173-52-201-90.ngrok.io/slack/events. Click save.
 
-Next, navigate to 'Slash Commands' and create a new command.
+2. Next, navigate to 'Slash Commands' and create a new command.
 ![alt text](./assets/commands_url.png)
 Here put the same link we used for interactivity in the request url field. Give the command a name and description. Click save.
 
-Finally, with the same link, navigate to 'Event Subscriptions':
+3. Finally, with the same link, navigate to 'Event Subscriptions':
 ![alt text](./assets/events.png)
 Paste the link in the request url field. Save changes.
 
