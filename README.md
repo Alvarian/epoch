@@ -32,7 +32,11 @@ npm run start
 ```
 
 ## Expose Your Bot
-Make sure to have [ngrok](https://ngrok.com/) for this step. Run ngrok http 3000 and copy the "Forwarding" url, ex: https://7d0b-173-52-201-90.ngrok.io
+In order for your slack to reach this running app, the local endpoint needs to be forwarded and exposed to the web using [ngrok](https://ngrok.com/). Follow the intructions until usage and run:
+```
+ngrok http 3000
+```
+Copy the "Forwarding" url, ex: https://7d0b-173-52-201-90.ngrok.io, to use in the next step.
 
 Go back to you slack api page and navigate to 'Interactivity & Shortcuts' on the side menu:
 ![alt text](./assets/interactivity.png)
