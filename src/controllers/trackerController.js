@@ -133,13 +133,11 @@ function isAfterCurrentDayMorning(date) {
 	return (isAfter) ? date : null;
 }
 
-const getProjAdminToSayHello = async ({ say, ack }, param) => {
+const getProjAdminToSayHello = async (say, userId, ack) => {
 	try {
 		await ack();
 
-		const data = await cacheIfFieldDoesNotExist(param, 'sprintByTitle');
-
-		await say(`Hi, I am <@${data.admin_sid}>.`);
+		await say(`Hi, I am <@${userId}>.`);
 	} catch (err) {
 		console.log(err);
 	}

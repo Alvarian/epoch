@@ -42,7 +42,7 @@ const trackCommandRoutes = module => {
 
 	switch (pointer) {
 		case 'say hello':
-			getProjAdminToSayHello(module, project);
+			getProjAdminToSayHello(module.say, body.user_id, ack);
 			
 			break;
 
